@@ -2,7 +2,7 @@ local fn, api = vim.fn, vim.api
 local strcharpart, strcharlen = fn.strcharpart, fn.strcharlen
 local CONSTANT = require("vietnamese.constant")
 local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VN_CHAR_DICT
-local BASE_VOwELS = CONSTANT.BASE_VOWELS
+local DIACRITIC_MAP = CONSTANT.DIACRITIC_MAP
 local tbl_concat = table.concat
 
 local M = {}
@@ -49,8 +49,12 @@ function M.upper(word)
 end
 
 function M.is_vietnamese_vowel(c)
-	local c_as_base = UTF8_VN_CHAR_DICT[c] and UTF8_VN_CHAR_DICT[c].base or c
-	return BASE_VOwELS[c_as_base] ~= nil
+	if DIACRITIC_MAP[c] == nil then
+		return false
+	elseif c == "d" or c == "D" then
+		return false
+	end
+	return true
 end
 
 function M.is_vietnamese_char(char)

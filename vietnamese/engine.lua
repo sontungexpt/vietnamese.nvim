@@ -1,7 +1,7 @@
 local vim = vim
 local fn, api = vim.fn, vim.api
 local require = require
-local strcharpart, strcharlen, matchstrpos = fn.strcharpart, fn.strcharlen, fn.matchstrpos
+local strcharpart, strcharlen, matchstrpos, split = fn.strcharpart, fn.strcharlen, fn.matchstrpos, fn.split
 local nvim_win_get_cursor, nvim_get_current_line = api.nvim_win_get_cursor, api.nvim_get_current_line
 local util = require("vietnamese.util")
 local nvim_buf_get_text, nvim_win_get_cursor = api.nvim_buf_get_text, api.nvim_win_get_cursor
@@ -395,59 +395,55 @@ end
 -- 	return base_text:gsub(main_vowel, accented, 1)
 -- end
 
-function M.find_main_vowel(word)
-	-- Find all vowels in the text
-	local vowel_positions = {}
-	local vowel_positions_len = 0
-	for i = 1, strcharlen(word) do
-		local char = strcharpart(word, i - 1, 1)
-		if VOWELS:find(char) then
-			vowel_positions_len = vowel_positions_len + 1
-			vowel_positions[vowel_positions] = { pos = i, char = char }
-		end
+-- function M.find_main_vowel(word)
+-- 	-- Find all vowels in the text
+-- 	local vowel_positions = {}
+-- 	local vowel_positions_len = 0
+-- 	for i = 1, strcharlen(word) do
+-- 		local char = strcharpart(word, i - 1, 1)
+-- 		if VOWELS:find(char) then
+-- 			vowel_positions_len = vowel_positions_len + 1
+-- 			vowel_positions[vowel_positions] = { pos = i, char = char }
+-- 		end
+-- 	end
+
+-- 	if vowel_positions_len == 0 then
+-- 		return nil
+-- 	elseif vowel_positions_len == 1 then
+-- 		return vowel_positions[1].char
+-- 	end
+
+-- 	-- Prefer the last vowel for certain vowel sequences
+-- 	local last_two = word:sub(-2)
+-- 	if last_two:match("[iuy]o") or last_two:match("[iuy]ơ") then
+-- 		return vowel_positions[vowel_positions_len].char
+-- 	end
+
+-- 	-- Special handling for common vowel sequences
+-- 	for _, seq in ipairs(VOWEL_SEQUENCES) do
+-- 		local start, end_pos = word:find(seq)
+-- 		if start then
+-- 			for j = start, end_pos do
+-- 				if VOWELS:find(word:sub(j, j)) then
+-- 					return word:sub(j, j)
+-- 				end
+-- 			end
+-- 		end
+-- 	end
+
+-- 	-- Default to the first vowel
+-- 	return vowel_positions[1].char
+-- end
+
+--- Helper to reverse a table in-place
+--- Note: This function modifies the original table.
+--- @param tbl table: Table to reverse
+--- @param len number: Optional length of the table to reverse (default is #tbl)
+local reverse_tbl = function(tbl, len)
+	len = len or #tbl
+	for i = 1, math.floor(len / 2) do
+		tbl[i], tbl[len - i + 1] = tbl[len - i + 1], tbl[i]
 	end
-
-	if vowel_positions_len == 0 then
-		return nil
-	elseif vowel_positions_len == 1 then
-		return vowel_positions[1].char
-	end
-
-	-- Prefer the last vowel for certain vowel sequences
-	local last_two = word:sub(-2)
-	if last_two:match("[iuy]o") or last_two:match("[iuy]ơ") then
-		return vowel_positions[vowel_positions_len].char
-	end
-
-	-- Special handling for common vowel sequences
-	for _, seq in ipairs(VOWEL_SEQUENCES) do
-		local start, end_pos = word:find(seq)
-		if start then
-			for j = start, end_pos do
-				if VOWELS:find(word:sub(j, j)) then
-					return word:sub(j, j)
-				end
-			end
-		end
-	end
-
-	-- Default to the first vowel
-	return vowel_positions[1].char
-end
-
-local reverse_tbl = function(tbl)
-	local reversed = {}
-	for i = #tbl, 1, -1 do
-		reversed[#reversed + 1] = tbl[i]
-	end
-	return reversed
-end
-
--- Helper to get text from a specific line and column range
-local function get_buf_text(bufnr, row, start_col, end_col)
-	-- Extract text between start_col and end_col on a given row
-	local lines = vim.api.nvim_buf_get_text(bufnr, row, row, start_col, end_col, {})
-	return lines[1] or ""
 end
 
 --- Get valid Vietnamese characters to the **left** of the cursor.
@@ -458,10 +454,12 @@ end
 --- @param col_0based number: Cursor column (0-based)
 --- @return table: Reversed list of left characters (from closest to furthest from cursor)
 --- @return number: Length of left_chars collected
-local function get_left_chars(bufnr, row_0based, col_0based)
-	local left_chars_reversed = {} -- Table to store characters we collect
-	local left_chars_reversed_len = 0 -- Length of the left_chars_reversed table
+local function collect_left_chars(bufnr, row_0based, col_0based)
+	local leftcs = {} -- Table to store characters we collect
+	local leftc_len = 0 -- Length of the left_chars_reversed table
 	local batch = 0 -- Number of times we expanded further left
+
+	-- local chars = split()
 
 	repeat
 		-- Calculate new start and end for reading more characters on the left
@@ -472,40 +470,37 @@ local function get_left_chars(bufnr, row_0based, col_0based)
 
 		local left_text = nvim_buf_get_text(bufnr, row_0based, start_col, row_0based, end_col, {})[1]
 		if not left_text or left_text == "" then
-			break
+			return leftcs, leftc_len
 		end
-		local char_len = strcharlen(left_text)
 
-		-- Walk backwards from the end of this segment
-		for i = char_len - 1, 0, -1 do
-			-- Get the i-th character from the end
-			local ch = strcharpart(left_text, i, 1)
-			-- If it's a Vietnamese character, prepend it to the result table
+		-- Split the text into characters
+		local chars = split(left_text, "\\zs")
+
+		for i = #chars, 1, -1 do
+			local ch = chars[i]
 			if is_vietnamese_char(ch) then
-				left_chars_reversed_len = left_chars_reversed_len + 1
-				left_chars_reversed[left_chars_reversed_len] = ch
+				leftc_len = leftc_len + 1
+				leftcs[leftc_len] = ch
 			else
-				-- If it's not valid, stop collecting
-				return reverse_tbl(left_chars_reversed), left_chars_reversed_len
+				-- If we hit a non-Vietnamese character, stop collecting
+				return leftcs, leftc_len
 			end
 
 			-- Stop if we've already collected enough characters
-			if left_chars_reversed_len >= THRESHOLD_WORD_LEN then
-				return reverse_tbl(left_chars_reversed), left_chars_reversed_len
+			if leftc_len >= THRESHOLD_WORD_LEN then
+				return leftcs, leftc_len
 			end
 		end
 
-		-- If we hit beginning of line, stop
 		if start_col == 0 then
-			break
+			return leftcs, leftc_len
 		end
 
 		-- Go one batch further left
 		batch = batch + 1
+	until leftc_len >= THRESHOLD_WORD_LEN
 
-	until left_chars_reversed_len >= THRESHOLD_WORD_LEN
-
-	return reverse_tbl(left_chars_reversed), left_chars_reversed_len
+	return leftcs, leftc_len
 end
 
 --- Get the character under cursor and valid Vietnamese characters to the **right**.
@@ -517,51 +512,46 @@ end
 -- @return table: List of valid Vietnamese characters to the right
 -- @return number: Number of right characters
 -- @return string: Character directly under the cursor
-local function get_cusor_char_and_right_chars(bufnr, row_0based, col_0based)
-	local cursor_char = ""
-	local right_chars = {}
-	local right_chars_len = 0 -- Length of the right_chars table
-	local batch = 0 -- Number of times we expanded further right
+local function collect_right_chars_from_cursor(bufnr, row_0based, col_0based, head_is_vn_char)
+	local rightcs = {}
+	local rightcs_len = 0
+	local batch = 0
 
 	repeat
 		local start_col = col_0based + THRESHOLD_WORD_LEN * batch
-		local end_col = col_0based + THRESHOLD_WORD_LEN * (batch + 1)
+		local end_col = col_0based + THRESHOLD_WORD_LEN * (batch + 1) + 1
 		local right_text = nvim_buf_get_text(bufnr, row_0based, start_col, row_0based, end_col, {})[1]
 
 		if not right_text or right_text == "" then
-			break -- No more text to the right
+			break
 		end
 
-		local char_len = strcharlen(right_text)
+		local chars = split(right_text, "\\zs")
 
-		local start = 0
-		if batch == 0 then
-			cursor_char = strcharpart(right_text, 0, 1)
-			start = 1 -- Start from the second character
+		-- Nếu là batch đầu tiên và cần bỏ qua ký tự đầu tiên
+		local i_start = 1
+		if head_is_vn_char and batch == 0 then
+			i_start = 2 -- Bỏ qua ký tự đầu tiên
 		end
-		for i = start, char_len - 1 do
-			local ch = strcharpart(right_text, i, 1)
 
-			-- If it's a Vietnamese character, add to result
+		for i = i_start, #chars do
+			local ch = chars[i]
 			if is_vietnamese_char(ch) then
-				right_chars_len = right_chars_len + 1
-				right_chars[right_chars_len] = ch
+				rightcs_len = rightcs_len + 1
+				rightcs[rightcs_len] = ch
 			else
-				return right_chars, right_chars_len, cursor_char
+				return rightcs, rightcs_len
 			end
 
-			-- Stop if we've already collected enough characters
-			if right_chars_len >= THRESHOLD_WORD_LEN then
-				return right_chars, right_chars_len, cursor_char
+			if rightcs_len >= THRESHOLD_WORD_LEN then
+				return rightcs, rightcs_len
 			end
 		end
 
-		-- Go one batch further right
 		batch = batch + 1
+	until rightcs_len >= THRESHOLD_WORD_LEN
 
-	until right_chars_len >= THRESHOLD_WORD_LEN
-
-	return right_chars, right_chars_len, cursor_char
+	return rightcs, rightcs_len
 end
 
 --- Main function to extract a processable Vietnamese word under cursor.
@@ -575,13 +565,13 @@ end
 --- @return table|nil: WordBuffer object containing the word characters, cursor position, and length
 function M.get_processable_word(bufnr, row_0based, col_0based, had_left_chars)
 	-- Get both sides of the word
-	local left_chars, left_chars_len = get_left_chars(bufnr, row_0based, col_0based)
+	local left_chars, left_chars_len = collect_left_chars(bufnr, row_0based, col_0based)
 	if left_chars_len == THRESHOLD_WORD_LEN then
 		return nil
 	elseif had_left_chars and left_chars_len == 0 then
 		return nil
 	end
-	local right_chars, right_chars_len, cursor_char = get_cusor_char_and_right_chars(bufnr, row_0based, col_0based)
+	local right_chars, right_chars_len, cursor_char = collect_right_chars_from_cursor(bufnr, row_0based, col_0based)
 
 	if left_chars_len + right_chars_len >= THRESHOLD_WORD_LEN then
 		return nil
