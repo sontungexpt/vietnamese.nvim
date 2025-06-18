@@ -1,17 +1,15 @@
 local vim = vim
 local fn, api = vim.fn, vim.api
 local require = require
-local strcharpart, strcharlen, matchstrpos, split = fn.strcharpart, fn.strcharlen, fn.matchstrpos, fn.split
-local nvim_win_get_cursor, nvim_get_current_line = api.nvim_win_get_cursor, api.nvim_get_current_line
+local split = fn.split
+local nvim_win_get_cursor, nvim_buf_set_text = api.nvim_win_get_cursor, api.nvim_buf_set_text
 local util = require("vietnamese.util")
 local nvim_buf_get_text, nvim_win_get_cursor = api.nvim_buf_get_text, api.nvim_win_get_cursor
 local is_vietnamese_char = util.is_vietnamese_char
 
 local CONSTANT = require("vietnamese.constant")
-local TONE_PLACEMENT = CONSTANT.TONE_PLACEMENT
-local VOWEL_SEQUENCES = CONSTANT.VOWEL_SEQUENCES
-local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VN_CHAR_DICT
 local THRESHOLD_WORD_LEN = 10
+local TONE_PLACEMENT = CONSTANT.TONE_PLACEMENT
 
 local decomposed_char_cache = {}
 
@@ -37,29 +35,17 @@ local M = {}
 -- local CODA_PATTERN = CONSTANT.CODA_PATTERN
 
 --- Check if a character is a valid input character for the current method
-local function is_moderator_char(char, method_config)
-	char = char:lower()
-	for _, diacritics in pairs(method_config.diacritic_map) do
-		for diacritic, _ in pairs(diacritics) do
-			if char == diacritic then
-				return true
-			end
-		end
+local function is_diacritic_pressed(char, method_config)
+	if type(method_config.is_diacritic_pressed) == "function" then
+		return method_config.is_diacritic_pressed(char)
 	end
-	for tone, _ in pairs(method_config.tone_map) do
-		if char == tone then
-			return true
-		end
-	end
-	for _, tone_removal in ipairs(method_config.tone_removals) do
-		if char == tone_removal then
-			return true
-		end
-	end
-	for _, c in ipairs(method_config.char_map) do
-		if c == char then
-			return true
-		end
+	local method_util = require("vietnamese.method-config-util")
+	if method_util.is_tone_key(char, method_config) then
+		return true
+	elseif method_util.is_tone_removal(char, method_config) then
+		return true
+	elseif method_util.is_shape_diacritic_key(char, method_config) then
+		return true
 	end
 	return false
 end
@@ -98,7 +84,7 @@ end
 
 local should_process_diacritic_tone = function(inserted_char, method_config)
 	return type(method_config.is_moderator_char) == "function" and method_config.is_moderator_char(inserted_char)
-		or is_moderator_char(inserted_char, method_config)
+		or is_diacritic_pressed(inserted_char, method_config)
 end
 
 -- function M.is_valid_sequence(seq)
@@ -439,11 +425,17 @@ end
 --- Note: This function modifies the original table.
 --- @param tbl table: Table to reverse
 --- @param len number: Optional length of the table to reverse (default is #tbl)
+--- @return table: Reversed table
 local reverse_tbl = function(tbl, len)
 	len = len or #tbl
+	if len < 2 then
+		return tbl
+	end
+
 	for i = 1, math.floor(len / 2) do
 		tbl[i], tbl[len - i + 1] = tbl[len - i + 1], tbl[i]
 	end
+	return tbl
 end
 
 --- Get valid Vietnamese characters to the **left** of the cursor.
@@ -470,7 +462,7 @@ local function collect_left_chars(bufnr, row_0based, col_0based)
 
 		local left_text = nvim_buf_get_text(bufnr, row_0based, start_col, row_0based, end_col, {})[1]
 		if not left_text or left_text == "" then
-			return leftcs, leftc_len
+			return reverse_tbl(leftcs, leftc_len), leftc_len
 		end
 
 		-- Split the text into characters
@@ -488,19 +480,19 @@ local function collect_left_chars(bufnr, row_0based, col_0based)
 
 			-- Stop if we've already collected enough characters
 			if leftc_len >= THRESHOLD_WORD_LEN then
-				return leftcs, leftc_len
+				return reverse_tbl(leftcs, leftc_len), leftc_len
 			end
 		end
 
 		if start_col == 0 then
-			return leftcs, leftc_len
+			return reverse_tbl(leftcs, leftc_len), leftc_len
 		end
 
 		-- Go one batch further left
 		batch = batch + 1
 	until leftc_len >= THRESHOLD_WORD_LEN
 
-	return leftcs, leftc_len
+	return reverse_tbl(leftcs, leftc_len), leftc_len
 end
 
 --- Get the character under cursor and valid Vietnamese characters to the **right**.
@@ -512,7 +504,7 @@ end
 -- @return table: List of valid Vietnamese characters to the right
 -- @return number: Number of right characters
 -- @return string: Character directly under the cursor
-local function collect_right_chars_from_cursor(bufnr, row_0based, col_0based, head_is_vn_char)
+local function collect_right_chars_from_cursor(bufnr, row_0based, col_0based, vn_head)
 	local rightcs = {}
 	local rightcs_len = 0
 	local batch = 0
@@ -530,8 +522,9 @@ local function collect_right_chars_from_cursor(bufnr, row_0based, col_0based, he
 
 		-- Nếu là batch đầu tiên và cần bỏ qua ký tự đầu tiên
 		local i_start = 1
-		if head_is_vn_char and batch == 0 then
-			i_start = 2 -- Bỏ qua ký tự đầu tiên
+		if vn_head and batch == 0 then
+			rightcs[1] = chars[1] -- Add the cursor character to the right characters
+			i_start = 2 -- Start from the second character
 		end
 
 		for i = i_start, #chars do
@@ -560,54 +553,32 @@ end
 --- @param bufnr number: Buffer number
 --- @param row_0based number: Row of the cursor (0-based)
 --- @param col_0based number: Column of the cursor (0-based)
---- @param excluded_cursor_char string: (Optional) Char to skip (used if we already handled cursor position)
---- @param had_left_chars boolean: If true, and no left chars found → return nil
---- @return table|nil: WordBuffer object containing the word characters, cursor position, and length
-function M.get_processable_word(bufnr, row_0based, col_0based, had_left_chars)
+--- @return CursorWord|nil: CursorWord object containing the word
+function M.find_potential_vnword_under_cursor(bufnr, row_0based, col_0based)
 	-- Get both sides of the word
-	local left_chars, left_chars_len = collect_left_chars(bufnr, row_0based, col_0based)
-	if left_chars_len == THRESHOLD_WORD_LEN then
-		return nil
-	elseif had_left_chars and left_chars_len == 0 then
-		return nil
-	end
-	local right_chars, right_chars_len, cursor_char = collect_right_chars_from_cursor(bufnr, row_0based, col_0based)
-
-	if left_chars_len + right_chars_len >= THRESHOLD_WORD_LEN then
-		return nil
-	elseif left_chars_len == 0 and right_chars_len == 0 then
+	local leftcs, leftcs_len = collect_left_chars(bufnr, row_0based, col_0based)
+	if leftcs_len < 1 or leftcs_len == THRESHOLD_WORD_LEN then
 		return nil
 	end
 
-	local word_chars = {}
-	for i = 1, left_chars_len do
-		word_chars[i] = left_chars[i]
-	end
-	local cursor_char_pos = left_chars_len + 1
-	word_chars[cursor_char_pos] = cursor_char
+	local rightcs, rightcs_len = collect_right_chars_from_cursor(bufnr, row_0based, col_0based)
+	local total_len = leftcs_len + rightcs_len
+	error(vim.inspect({
+		leftcs = leftcs,
+		rightcs = rightcs,
+	}))
 
-	for i = 1, right_chars_len do
-		word_chars[cursor_char_pos + i] = right_chars[i]
+	if total_len >= THRESHOLD_WORD_LEN then
+		return nil
 	end
 
-	return require("vietnamese.WordBuffer").new(word_chars, cursor_char_pos, left_chars_len + 1 + right_chars_len)
-end
-
---- Get a list of Vietnamese characters excluding the cursor character.
----
---- This function is used to get the word characters without the cursor character.
----
---- @param word_chars table: List of characters forming the word_chars
---- @param cursor_char_pos number: 1-based position of the cursor character in the word_chars
---- @return table: List of characters excluding the cursor characters
-local function get_exclued_cursor_char_words(word_chars, cursor_char_pos)
-	local result = {}
-	for i, char in ipairs(word_chars) do
-		if i ~= cursor_char_pos then
-			result[#result + 1] = char
-		end
+	--- combine right to left to get full word
+	local word_chars = leftcs
+	for i = 1, rightcs_len do
+		word_chars[leftcs_len + i] = rightcs[i]
 	end
-	return result
+
+	return require("vietnamese.CursorWord"):new(word_chars, leftcs_len + 1, true, leftcs_len + rightcs_len)
 end
 
 M.setup = function(config)
@@ -624,45 +595,46 @@ M.setup = function(config)
 				inserting = true
 				return
 			elseif not inserting then
+				-- we are removing characters, so we don't need to process
 				return
 			end
+			--       -- If we are inserting, we need to process the character
 			inserting = false -- Reset inserting state
 
-			local bufnr = 0
+			local method_config = M.get_method_config()
+
+			if not is_diacritic_pressed(inserted_char, method_config) then
+				return
+			end
+
 			local pos = nvim_win_get_cursor(0)
 			local row_0based = pos[1] - 1 -- Row is 0-indexed in API
 			local col_0based = pos[2] -- Column is 0-indexed
-			-- check if is yank
-			local word_chars, cursor_char_pos = M.get_processable_word(bufnr, row_0based, col_0based, true)
-			vim.notify(
-				vim.inspect({ word_chars, cursor_char_pos }),
-				vim.log.levels.INFO,
-				{ title = "Vietnamese Input Debug" }
-			)
 
-			if not word_chars or #word_chars == 0 then
-				return
-			elseif not should_process_diacritic_tone(inserted_char, M.get_method_config()) then
+			local cursor_word = M.find_potential_vnword_under_cursor(args.buf, row_0based, col_0based)
+			if
+				not cursor_word
+				or not cursor_word:is_potential_diacritic_applicable(inserted_char, M.get_method_config())
+			then
 				return
 			end
-
-			inserted_char = "" -- Reset inserted character
-
-			-- local processed = M.process_raw_word(raw_text, inserted_char)
-
-			-- if not processed or processed == raw_text then
-			-- 	return
-			-- end
+			cursor_word:processes_diacritics(method_config)
+			local processed = cursor_word:tostring()
 
 			-- -- Save cursor position relative to word
 			-- local relative_pos = col - word_start
 
-			-- vim.api.nvim_buf_set_text(0, row, word_start, row, word_end, { processed })
+			local w_start, w_end = cursor_word:column_boundaries()
+
+			nvim_buf_set_text(0, row_0based, w_start, row_0based, w_end + 1, { processed })
 
 			-- -- Restore cursor position
 			-- local new_length = #processed
 			-- local new_cursor_col = math.min(word_start + relative_pos, word_start + new_length)
 			-- vim.api.nvim_win_set_cursor(0, { row + 1, new_cursor_col })
+
+			-- Notify the user about the processed word
+			inserted_char = "" -- Reset inserted character
 		end,
 	})
 end

@@ -1,5 +1,5 @@
 local fn, api = vim.fn, vim.api
-local strcharpart, strcharlen = fn.strcharpart, fn.strcharlen
+local split = fn.split
 local CONSTANT = require("vietnamese.constant")
 local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VN_CHAR_DICT
 local DIACRITIC_MAP = CONSTANT.DIACRITIC_MAP
@@ -7,45 +7,36 @@ local tbl_concat = table.concat
 
 local M = {}
 
-function M.iterate_utf8_string(str)
-	local len = strcharlen(str)
-	local i = 0
+-- function M.iterate_utf8_string(str)
+-- 	local len = strcharlen(str)
+-- 	local i = 0
 
-	return function()
-		if i < len then
-			local c = strcharpart(str, i, 1)
-			i = i + 1
-			return c, i - 1
-		end
-	end
-end
+-- 	return function()
+-- 		if i < len then
+-- 			local c = strcharpart(str, i, 1)
+-- 			i = i + 1
+-- 			return c, i - 1
+-- 		end
+-- 	end
+-- end
 
 function M.lower(word)
-	local word_len = strcharlen(word)
-	if word_len == 1 then
-		return UTF8_VN_CHAR_DICT[word] and UTF8_VN_CHAR_DICT[word].lo or word:lower()
-	end
+	local chars = split(word, "\\zs")
 
-	local result = {}
-	for i = 0, strcharlen(word) - 1 do
-		local c = strcharpart(word, i, 1)
-		result[i] = UTF8_VN_CHAR_DICT[c] and UTF8_VN_CHAR_DICT[c].lo or c:lower()
+	for i = 1, #chars do
+		local c = chars[i]
+		chars[i] = UTF8_VN_CHAR_DICT[c] and UTF8_VN_CHAR_DICT[c].lo or c:lower()
 	end
-	return tbl_concat(result)
+	return tbl_concat(chars)
 end
 
 function M.upper(word)
-	local word_len = strcharlen(word)
-	if word_len == 1 then
-		return UTF8_VN_CHAR_DICT[word] and UTF8_VN_CHAR_DICT[word].up or word:upper()
+	local chars = split(word, "\\zs")
+	for i = 1, #chars do
+		local c = chars[i]
+		chars[i] = UTF8_VN_CHAR_DICT[c] and UTF8_VN_CHAR_DICT[c].up or c:upper()
 	end
-
-	local result = {}
-	for i = 0, strcharlen(word) - 1 do
-		local c = strcharpart(word, i, 1)
-		result[i] = UTF8_VN_CHAR_DICT[c] and UTF8_VN_CHAR_DICT[c].up or c:upper()
-	end
-	return tbl_concat(result)
+	return tbl_concat(chars)
 end
 
 function M.is_vietnamese_vowel(c)
@@ -57,6 +48,10 @@ function M.is_vietnamese_vowel(c)
 	return true
 end
 
+function M.is_level1_vowel(c)
+	return c:match("^[aeiouyAEIOUY]$") ~= nil
+end
+
 function M.is_vietnamese_char(char)
 	if char == "" then
 		return false
@@ -64,6 +59,27 @@ function M.is_vietnamese_char(char)
 		return true
 	end
 	return char:match("^%a$") ~= nil
+end
+
+M.downgrade_to_level1 = function(c)
+	return UTF8_VN_CHAR_DICT[c] and UTF8_VN_CHAR_DICT[c][1] or c
+end
+
+M.downgrade_to_level2 = function(c)
+	return UTF8_VN_CHAR_DICT[c] and UTF8_VN_CHAR_DICT[c][2] or c
+end
+
+M.has_tone_mark = function(c)
+	return UTF8_VN_CHAR_DICT[c] and UTF8_VN_CHAR_DICT[c].tone ~= nil
+end
+
+M.remove_tone_mark = function(c)
+	local dict = UTF8_VN_CHAR_DICT[c]
+	local curr_tone = dict and dict.tone
+	if curr_tone then
+		return dict[2], curr_tone
+	end
+	return c
 end
 
 return M
