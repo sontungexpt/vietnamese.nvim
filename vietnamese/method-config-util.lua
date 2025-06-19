@@ -24,13 +24,12 @@ end
 
 function M.tone_diacritic(diacritic_key, char, method_config)
 	local diacritic_map = DIACRITIC_MAP[char]
-
-	local diacritic = method_config.tone_map[diacritic_key]
-
-	if diacritic and diacritic_map[diacritic] then
-		return diacritic
+	if diacritic_map then
+		local diacritic = method_config.tone_map[diacritic_key]
+		if diacritic and diacritic_map[diacritic] then
+			return diacritic
+		end
 	end
-
 	return nil
 end
 

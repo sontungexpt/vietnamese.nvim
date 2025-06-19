@@ -3,11 +3,10 @@ local ENUM_DIACRITIC = require("vietnamese.constant").ENUM_DIACRITIC
 local M = {
 	tone_map = {
 		["s"] = ENUM_DIACRITIC.ACUTE,
-		["z"] = ENUM_DIACRITIC.GRAVE,
-		["f"] = ENUM_DIACRITIC.HOOK,
-		["r"] = ENUM_DIACRITIC.TILDE,
-		["x"] = ENUM_DIACRITIC.DOT,
-		["j"] = ENUM_DIACRITIC.CIRCUMFLEX,
+		["f"] = ENUM_DIACRITIC.GRAVE,
+		["r"] = ENUM_DIACRITIC.HOOK,
+		["x"] = ENUM_DIACRITIC.TILDE,
+		["j"] = ENUM_DIACRITIC.DOT,
 	},
 	tone_removals = { "z" },
 	shape_diacritic_map = {

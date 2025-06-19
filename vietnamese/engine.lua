@@ -446,7 +446,7 @@ end
 --- @param col_0based number: Cursor column (0-based)
 --- @return table: Reversed list of left characters (from closest to furthest from cursor)
 --- @return number: Length of left_chars collected
-local function collect_left_chars(bufnr, row_0based, col_0based)
+local function collect_left_chars(bufnr, row_0based, col_0based, vn_at_tail)
 	local leftcs = {} -- Table to store characters we collect
 	local leftc_len = 0 -- Length of the left_chars_reversed table
 	local batch = 0 -- Number of times we expanded further left
@@ -468,14 +468,22 @@ local function collect_left_chars(bufnr, row_0based, col_0based)
 		-- Split the text into characters
 		local chars = split(left_text, "\\zs")
 
-		for i = #chars, 1, -1 do
+		-- Nếu là batch đầu tiên và cần bỏ qua ký tự đầu tiên
+		local i_start = #chars
+		if vn_at_tail and batch == 0 then
+			leftc_len = 1 -- We will add the cursor character
+			leftcs[1] = chars[i_start] -- Add the cursor character to the right characters
+			i_start = i_start - 1 -- Start from the second character
+		end
+
+		for i = i_start, 1, -1 do
 			local ch = chars[i]
 			if is_vietnamese_char(ch) then
 				leftc_len = leftc_len + 1
 				leftcs[leftc_len] = ch
 			else
 				-- If we hit a non-Vietnamese character, stop collecting
-				return leftcs, leftc_len
+				return reverse_tbl(leftcs, leftc_len), leftc_len
 			end
 
 			-- Stop if we've already collected enough characters
@@ -504,14 +512,14 @@ end
 -- @return table: List of valid Vietnamese characters to the right
 -- @return number: Number of right characters
 -- @return string: Character directly under the cursor
-local function collect_right_chars_from_cursor(bufnr, row_0based, col_0based, vn_head)
+local function collect_right_chars_from_cursor(bufnr, row_0based, col_0based)
 	local rightcs = {}
 	local rightcs_len = 0
 	local batch = 0
 
 	repeat
 		local start_col = col_0based + THRESHOLD_WORD_LEN * batch
-		local end_col = col_0based + THRESHOLD_WORD_LEN * (batch + 1) + 1
+		local end_col = col_0based + THRESHOLD_WORD_LEN * (batch + 1)
 		local right_text = nvim_buf_get_text(bufnr, row_0based, start_col, row_0based, end_col, {})[1]
 
 		if not right_text or right_text == "" then
@@ -520,14 +528,7 @@ local function collect_right_chars_from_cursor(bufnr, row_0based, col_0based, vn
 
 		local chars = split(right_text, "\\zs")
 
-		-- Nếu là batch đầu tiên và cần bỏ qua ký tự đầu tiên
-		local i_start = 1
-		if vn_head and batch == 0 then
-			rightcs[1] = chars[1] -- Add the cursor character to the right characters
-			i_start = 2 -- Start from the second character
-		end
-
-		for i = i_start, #chars do
+		for i = 1, #chars do
 			local ch = chars[i]
 			if is_vietnamese_char(ch) then
 				rightcs_len = rightcs_len + 1
@@ -554,20 +555,20 @@ end
 --- @param row_0based number: Row of the cursor (0-based)
 --- @param col_0based number: Column of the cursor (0-based)
 --- @return CursorWord|nil: CursorWord object containing the word
-function M.find_potential_vnword_under_cursor(bufnr, row_0based, col_0based)
+function M.find_potential_vnword_under_cursor(bufnr, row_0based, col_0based, inserting)
 	-- Get both sides of the word
-	local leftcs, leftcs_len = collect_left_chars(bufnr, row_0based, col_0based)
-	if leftcs_len < 1 or leftcs_len == THRESHOLD_WORD_LEN then
+	local leftcs, leftcs_len = collect_left_chars(bufnr, row_0based, col_0based, inserting)
+	if leftcs_len == leftcs_len == THRESHOLD_WORD_LEN then
+		return nil
+	elseif inserting and leftcs_len < 2 then
+		return nil
+	elseif leftcs_len < 1 then
 		return nil
 	end
 
 	local rightcs, rightcs_len = collect_right_chars_from_cursor(bufnr, row_0based, col_0based)
-	local total_len = leftcs_len + rightcs_len
-	error(vim.inspect({
-		leftcs = leftcs,
-		rightcs = rightcs,
-	}))
 
+	local total_len = leftcs_len + rightcs_len
 	if total_len >= THRESHOLD_WORD_LEN then
 		return nil
 	end
@@ -578,7 +579,7 @@ function M.find_potential_vnword_under_cursor(bufnr, row_0based, col_0based)
 		word_chars[leftcs_len + i] = rightcs[i]
 	end
 
-	return require("vietnamese.CursorWord"):new(word_chars, leftcs_len + 1, true, leftcs_len + rightcs_len)
+	return require("vietnamese.CursorWord"):new(word_chars, leftcs_len + 1, inserting, total_len)
 end
 
 M.setup = function(config)
@@ -611,22 +612,26 @@ M.setup = function(config)
 			local row_0based = pos[1] - 1 -- Row is 0-indexed in API
 			local col_0based = pos[2] -- Column is 0-indexed
 
-			local cursor_word = M.find_potential_vnword_under_cursor(args.buf, row_0based, col_0based)
+			local cursor_word = M.find_potential_vnword_under_cursor(args.buf, row_0based, col_0based, true)
 			if
 				not cursor_word
-				or not cursor_word:is_potential_diacritic_applicable(inserted_char, M.get_method_config())
+				or not cursor_word:is_potential_diacritic_combinable(inserted_char, M.get_method_config())
 			then
 				return
 			end
-			cursor_word:processes_diacritics(method_config)
-			local processed = cursor_word:tostring()
+			local should_update = cursor_word:processes_diacritics(method_config)
+			if not should_update then
+				return
+			end
+
+			local new_word = cursor_word:tostring()
 
 			-- -- Save cursor position relative to word
 			-- local relative_pos = col - word_start
 
-			local w_start, w_end = cursor_word:column_boundaries()
+			local w_start, w_end = cursor_word:column_boundaries(col_0based)
 
-			nvim_buf_set_text(0, row_0based, w_start, row_0based, w_end + 1, { processed })
+			nvim_buf_set_text(0, row_0based, w_start, row_0based, w_end, { new_word })
 
 			-- -- Restore cursor position
 			-- local new_length = #processed
