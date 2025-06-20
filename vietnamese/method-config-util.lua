@@ -5,27 +5,28 @@ local list_contains = vim.list_contains
 
 local M = {}
 
-function M.is_tone_key(key_c, method_config)
-	return method_config.tone_map[key_c:lower()] ~= nil
+function M.is_tone_key(key, method_config)
+	return method_config.tone_keys[key:lower()] ~= nil
 end
-function M.is_shape_diacritic_key(key_c, method_config)
-	key_c = key_c:lower()
-	for _, v in pairs(method_config.shape_diacritic_map) do
-		if v[key_c] then
+
+function M.is_shape_diacritic_key(key, method_config)
+	key = key:lower()
+	for _, v in pairs(method_config.shape_diacritic_keys) do
+		if v[key] then
 			return true
 		end
 	end
 	return false
 end
 
-function M.is_tone_removal(key_c, method_config)
-	return list_contains(method_config.tone_removals, key_c:lower())
+function M.is_tone_remove_key(key, method_config)
+	return list_contains(method_config.tone_remove_keys, key:lower())
 end
 
-function M.tone_diacritic(diacritic_key, char, method_config)
-	local diacritic_map = DIACRITIC_MAP[char]
+function M.get_tone_diacritic(key, base_char, method_config)
+	local diacritic_map = DIACRITIC_MAP[base_char]
 	if diacritic_map then
-		local diacritic = method_config.tone_map[diacritic_key]
+		local diacritic = method_config.tone_keys[key]
 		if diacritic and diacritic_map[diacritic] then
 			return diacritic
 		end
@@ -33,11 +34,11 @@ function M.tone_diacritic(diacritic_key, char, method_config)
 	return nil
 end
 
-function M.shape_diacritic(diacritic_key, char, method_config)
-	local diacritic_map = DIACRITIC_MAP[char]
+function M.get_shape_diacritic(key, base_char, method_config)
+	local diacritic_map = DIACRITIC_MAP[base_char]
 	if diacritic_map then
-		local shape_diacritic_map = method_config.shape_diacritic_map[char:lower()]
-		local diacritic = shape_diacritic_map and shape_diacritic_map[diacritic_key]
+		local shape_diacritic_keys = method_config.shape_diacritic_keys[base_char:lower()]
+		local diacritic = shape_diacritic_keys and shape_diacritic_keys[key]
 		if diacritic and diacritic_map[diacritic] then
 			return diacritic
 		end
@@ -45,22 +46,23 @@ function M.shape_diacritic(diacritic_key, char, method_config)
 	return nil
 end
 
-function M.diacritic(diacritic_key, char, method_config)
-	local diacritic = M.tone_diacritic(diacritic_key, char, method_config)
-		or M.shape_diacritic(diacritic_key, char, method_config)
+function M.get_diacritic(key, base_char, method_config)
+	local diacritic = M.get_tone_diacritic(key, base_char, method_config)
+		or M.get_shape_diacritic(key, base_char, method_config)
+
 	if diacritic then
 		return diacritic
 	elseif
-		list_contains(method_config.tone_removals, diacritic_key)
-		and UTF8_VN_CHAR_DICT[char]
-		and UTF8_VN_CHAR_DICT[char].tone
+		M.is_tone_remove_key(key, method_config)
+		and UTF8_VN_CHAR_DICT[base_char]
+		and UTF8_VN_CHAR_DICT[base_char].tone
 	then
-		return CONSTANT.ENUM_DIACRITIC.REMOVAL
+		return CONSTANT.ENUM_DIACRITIC.REMOVE
 	end
 	return nil
 end
 
 function M.is_diacritic_applicable(diacritic_key, applied_char, method_config)
-	return M.diacritic(diacritic_key, applied_char, method_config) ~= nil
+	return M.get_diacritic(diacritic_key, applied_char, method_config) ~= nil
 end
 return M

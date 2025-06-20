@@ -1,4 +1,3 @@
-local strdisplaywidth = vim.fn.strdisplaywidth
 local tbl_concat = table.concat
 
 local CONSTANT = require("vietnamese.constant")
@@ -14,7 +13,6 @@ local MAX_CONSONANT_CLUSTERS_LENGTH = 3
 -- local TONE_PLACEMENT = CONSTANT.TONE_PLACEMENT
 -- local VOWEL_SEQUENCES = CONSTANT.VOWEL_SEQUENCES
 local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VN_CHAR_DICT
-local DIACRITIC_MAP = CONSTANT.DIACRITIC_MAP
 local BASE_VOWEL_PRIORITY = CONSTANT.BASE_VOWEL_PRIORITY
 
 local util = require("vietnamese.util")
@@ -28,9 +26,6 @@ local method_config_util = require("vietnamese.method-config-util")
 ---@field private inserted_char_index number The index of the cursor position in the character lis (1-based)
 ---@field private vowel_start number The index of the first vowel in the word (1-based)
 ---@field private vowel_end number The index of the last vowel in the word (1-based)
----
----
----
 local CursorWord = {}
 
 -- allow to access public methods and properties
@@ -89,33 +84,15 @@ function CursorWord:new(raw, cursor_char_index, insertion, raw_len)
 	return obj
 end
 
-function CursorWord:is_duplicate_d_or_vowel()
+function CursorWord:iter_chars(cb, raw)
 	local p = _privates[self]
-	local word = p.word
-	local seen = {}
-	for k = 1, p.word_len do
-		local c = util.downgrade_to_level2(word[k])
-		if c == "d" or c == "D" or util.is_vietnamese_vowel(c) then
-			if seen[c] then
-				return true
-			end
-			seen[c] = true
-		end
-	end
+	local chars = raw and p.raw or p.word
+	local length = raw and p.raw_len or p.word_len
 
-	return false
-end
-
---- Checks if at least one character in the list is a vowel
---- @param word table the list of characters to check
---- @return boolean true if at least one character is a vowel, false otherwise
-local function at_least_once_vowel(word)
-	for _, c in ipairs(word) do
-		if util.is_vietnamese_vowel(c) then
-			return true
-		end
+	for i = 1, length, 1 do
+		local char = chars[i]
+		cb(i, char)
 	end
-	return false
 end
 
 --- Checks if the word is potential to apply diacritic
@@ -129,17 +106,15 @@ function CursorWord:is_potential_diacritic_combinable(diacritic_key, method_conf
 	end
 
 	local p = _privates[self]
-	if p.word_len > 1 and not at_least_once_vowel(p.word) then
+	local word = p.word
+	if p.word_len > 1 and not util.some_vowels(word) and not util.is_exceed_repetition_vowel(word) then
 		return false -- No vowel in the word, diacritic cannot be applied
 	end
 
-	local word = p.raw
+	local raw = p.raw
 	for i = 1, p.inserted_char_index - 1 do
-		local base_level1 = util.downgrade_to_level1(word[i])
-		if method_config_util.diacritic(diacritic_key, base_level1, method_config) then
-			-- if self:is_duplicate_d_or_vowel() then
-			-- 	return false
-			-- end
+		local base_level1 = util.downgrade_to_level1(raw[i])
+		if method_config_util.get_diacritic(diacritic_key, base_level1, method_config) then
 			return true
 		end
 	end
@@ -165,6 +140,22 @@ function CursorWord:get(raw)
 	return raw and p.raw or p.word
 end
 
+function CursorWord:remove_tone()
+	local p = _privates[self]
+	local main_vowel, main_vowel_index = self:find_main_vowel()
+	if not main_vowel then
+		return false
+	end
+
+	local vowel, removed_tone = util.strip_tone(main_vowel)
+	if not removed_tone then
+		return false
+	end
+
+	p.word[main_vowel_index] = vowel
+	return true
+end
+
 --- Processes tone marks in the word
 function CursorWord:processes_tone(method_config)
 	local p = _privates[self]
@@ -179,16 +170,12 @@ function CursorWord:processes_tone(method_config)
 		return false
 	end
 
-	local tone_diacritic = method_config_util.tone_diacritic(self:inserted_char(), main_vowel, method_config)
+	local vowel, removed_tone = util.strip_tone(main_vowel)
+	local tone_diacritic = method_config_util.get_tone_diacritic(self:inserted_char(), vowel, method_config)
 	if not tone_diacritic then
 		return false
-	end
-
-	local vowel, removed_tone = util.strip_tone(main_vowel)
-
-	if removed_tone == tone_diacritic then
-		error("Tone mark is already applied: " .. removed_tone)
-		p.word = p.raw
+	elseif removed_tone == tone_diacritic then
+		p.word = util.copy_list(p.raw) -- make a copy of the word)
 		p.word[main_vowel_index] = vowel
 	else
 		-- no tone mark found,
@@ -200,7 +187,7 @@ end
 
 --- Processes diacritics in the word
 function CursorWord:processes_diacritics(method_config)
-	if not (self:analize_word_structure()) then
+	if not (self:analyzie_word_structure()) then
 		return false
 	end
 
@@ -245,29 +232,33 @@ function CursorWord:tostring(raw)
 end
 
 --- Finds the main vowel in the character list
---- @param word table the character list to search
---- @param word_len integer the length of the character list
+--- @param chars table the character list to search
+--- @param chars_size integer the length of the character list
+--- @param i integer the starting index (1-based, optional)
+--- @param j integer the ending index (1-based, optional)
 --- @return string|nil the main vowel character if found, nil otherwise
---- @return integer the index of the main vowel character if found, nil otherwise
-local function _find_main_vowel(word, word_len)
-	-- Check for tone-marked vowels first
-
+--- @return integer the index of the main vowel character in the word if found, -1 otherwise
+local function find_main_vowel(chars, chars_size, i, j)
 	-- Find base vowels with highest priority
 	local candidate_char = nil
 	local candidate_index = -1
 	local min_priority = 100
 
-	for i = 1, word_len do
-		local char = word[i]
-		if util.has_tone_mark(char) then
-			return char, i
+	i = i and i > 0 and i or 1
+	j = j and j < chars_size and j or chars_size
+
+	for k = i, j do
+		local char = chars[k]
+		-- Check for tone-marked vowels first
+		if util.has_tone(char) then
+			return char, k
 		elseif util.is_vietnamese_vowel(char) then
 			local base_level2 = util.downgrade_to_level2(char)
 			local priority = BASE_VOWEL_PRIORITY[base_level2]
 			if priority and priority < min_priority then
 				min_priority = priority
 				candidate_char = char
-				candidate_index = i
+				candidate_index = k
 			end
 		end
 	end
@@ -280,7 +271,10 @@ end
 --- @return integer the index of the main vowel character if found, nil otherwise
 function CursorWord:find_main_vowel()
 	local p = _privates[self]
-	return _find_main_vowel(p.word, p.word_len)
+	if p.vowel_start == -1 then
+		return nil, -1
+	end
+	return find_main_vowel(p.word, p.word_len, p.vowel_start, p.vowel_end)
 end
 
 --- Check if all characters from i to j are vowels
@@ -386,7 +380,7 @@ end
 
 --- Analyze structure of Vietnamese word (onset + vowel cluster)
 --- @return boolean True if the word structure is analizing succeed
-function CursorWord:analize_word_structure()
+function CursorWord:analyzie_word_structure()
 	local p = _privates[self]
 	local word, len = p.word, p.word_len
 	if len == 1 then
@@ -427,7 +421,7 @@ end
 
 --- Function to validate Vietnamese word structure
 function CursorWord:is_valid_vietnamese_word()
-	return not self:analize_word_structure()
+	return not self:analyzie_word_structure()
 end
 
 --- Returns the column boundaries of the cursor position
@@ -439,14 +433,15 @@ function CursorWord:column_boundaries(cursor_col)
 	local raw = p.raw
 	local cursor_char_index = p.cursor_char_index
 
-	local start = cursor_col - strdisplaywidth(tbl_concat(raw, "", 1, cursor_char_index - 1))
+	local start = cursor_col - #tbl_concat(raw, "", 1, cursor_char_index - 1)
 
 	if cursor_char_index > p.raw_len then
 		return start, cursor_col
 	end
 
-	local end_ = cursor_col + strdisplaywidth(tbl_concat(raw, "", cursor_char_index, p.raw_len)) - 1
-	return start, end_ + 1
+	local end_ = cursor_col + #tbl_concat(raw, "", cursor_char_index, p.raw_len)
+
+	return start, end_
 end
 
 return CursorWord
