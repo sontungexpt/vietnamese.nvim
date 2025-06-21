@@ -29,9 +29,9 @@ local function is_diacritic_pressed(char, method_config)
 	local method_util = require("vietnamese.method-config-util")
 	if method_util.is_tone_key(char, method_config) then
 		return true
-	elseif method_util.is_tone_remove_key(char, method_config) then
+	elseif method_util.is_tone_removal_key(char, method_config) then
 		return true
-	elseif method_util.is_shape_diacritic_key(char, method_config) then
+	elseif method_util.is_shape_key(char, method_config) then
 		return true
 	end
 	return false
@@ -181,7 +181,7 @@ end
 --- @param bufnr number: Buffer number
 --- @param row_0based number: Row of the cursor (0-based)
 --- @param col_0based number: Column of the cursor (0-based)
---- @return CursorWord|nil: CursorWord object containing the word
+--- @return WordEngine|nil: CursorWord object containing the word
 function M.find_vnword_under_cursor(bufnr, row_0based, col_0based, inserting)
 	-- Get both sides of the word
 	local left_chars, left_len = collect_left_chars(bufnr, row_0based, col_0based, inserting)
@@ -206,7 +206,7 @@ function M.find_vnword_under_cursor(bufnr, row_0based, col_0based, inserting)
 		word_chars[left_len + i] = right_chars[i]
 	end
 
-	return require("vietnamese.CursorWord"):new(word_chars, left_len + 1, inserting, word_len)
+	return require("vietnamese.WordEngine"):new(word_chars, left_len + 1, inserting, word_len)
 end
 
 M.setup = function()
@@ -248,11 +248,12 @@ M.setup = function()
 			local cursor_word = M.find_vnword_under_cursor(args.buf, row_0based, col_0based, true)
 			if
 				not cursor_word
-				or not cursor_word:is_potential_diacritic_combinable(inserted_char, M.get_method_config())
+				or not cursor_word:is_potential_diacritic_key(inserted_char, M.get_method_config())
+				or not cursor_word:is_potential_vnword()
 			then
 				return
 			end
-			local should_update = cursor_word:processes_diacritics(method_config)
+			local should_update = cursor_word:processes_diacritic(method_config)
 			if not should_update then
 				return
 			end

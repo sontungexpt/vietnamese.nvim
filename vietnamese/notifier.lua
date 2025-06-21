@@ -12,4 +12,8 @@ function M.info(message)
 	notify(message, LOG_LEVELS.INFO, { title = TITLE })
 end
 
+function M.warn(message)
+	notify(message, LOG_LEVELS.WARN, { title = TITLE })
+end
+
 return M

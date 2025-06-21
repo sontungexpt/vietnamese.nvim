@@ -18,7 +18,7 @@ local BASE_VOWEL_PRIORITY = CONSTANT.BASE_VOWEL_PRIORITY
 local util = require("vietnamese.util")
 local method_config_util = require("vietnamese.method-config-util")
 
----@class CursorWord
+---@class WordEngine
 ---@field private word table A table of characters representing the word
 ---@field private word_len number The total number of characters in the word without the
 ---@field private raw table A table of characters representing the original word @field private raw_len number The total number of characters in the original word
@@ -26,10 +26,10 @@ local method_config_util = require("vietnamese.method-config-util")
 ---@field private inserted_char_index number The index of the cursor position in the character lis (1-based)
 ---@field private vowel_start number The index of the first vowel in the word (1-based)
 ---@field private vowel_end number The index of the last vowel in the word (1-based)
-local CursorWord = {}
+local WordEngine = {}
 
 -- allow to access public methods and properties
-CursorWord.__index = CursorWord
+WordEngine.__index = WordEngine
 
 -- Creates a new CursorWord instancecur
 --- @class CursorWord
@@ -52,8 +52,8 @@ end
 --- @param cursor_char_index integer the index of the cursor position in the character list (1-based)
 --- @param insertion boolean whether the cursor is in insertion mode (optional, defaults to false)
 --- @param raw_len integer the total number of characters in the word (optional, defaults to length of char_list)
---- @return CursorWord  instance
-function CursorWord:new(raw, cursor_char_index, insertion, raw_len)
+--- @return WordEngine  instance
+function WordEngine:new(raw, cursor_char_index, insertion, raw_len)
 	local obj = setmetatable({}, self)
 
 	raw_len = raw_len or #raw
@@ -76,15 +76,17 @@ function CursorWord:new(raw, cursor_char_index, insertion, raw_len)
 		-- if the cursor is at the end of the word
 		cursor_char_index = cursor_char_index,
 
+		analyzed = false, -- whether the word structure has been analyzed
+
 		vowel_start = -1,
-		vowel_end = -1,
+		vowel_end = -2, -- -2 to make sure that it is not valid when loop from start to end
 	}
 
 	-- error(vim.inspect(_privates[obj]))
 	return obj
 end
 
-function CursorWord:iter_chars(cb, raw)
+function WordEngine:iter_chars(cb, raw)
 	local p = _privates[self]
 	local chars = raw and p.raw or p.word
 	local length = raw and p.raw_len or p.word_len
@@ -95,26 +97,34 @@ function CursorWord:iter_chars(cb, raw)
 	end
 end
 
---- Checks if the word is potential to apply diacritic
---- @param diacritic_key string the key of the diacritic to check
---- @param method_config table|nil the method configuration to use for checking
---- @return boolean true if the diacritic can be applied, false otherwise
-function CursorWord:is_potential_diacritic_combinable(diacritic_key, method_config)
-	vim.notify("is_potential_diacritic_combinable called with diacritic_key: " .. diacritic_key)
-	if method_config == nil then
-		return false
-	end
-
+function WordEngine:is_potential_vnword()
 	local p = _privates[self]
 	local word = p.word
-	if p.word_len > 1 and not util.some_vowels(word) and not util.is_exceed_repetition_vowel(word) then
+	local word_len = p.word_len
+	if
+		word_len > 1
+		and not util.some_vowels(word, word_len)
+		and not util.is_exceeded_vowel_repetition_time(word, word_len)
+		and not util.unique_tone_marked(word, word_len)
+	then
 		return false -- No vowel in the word, diacritic cannot be applied
 	end
+	return true
+end
 
+--- Checks if the word is potential to apply diacritic
+--- @param key string the key of the diacritic to check
+--- @param method_config table|nil the method configuration to use for checking
+--- @return boolean true if the diacritic can be applied, false otherwise
+function WordEngine:is_potential_diacritic_key(key, method_config)
+	assert(key, "diacritic_key must not be nil")
+	assert(method_config, "method_config must not be nil")
+
+	local p = _privates[self]
 	local raw = p.raw
 	for i = 1, p.inserted_char_index - 1 do
-		local base_level1 = util.downgrade_to_level1(raw[i])
-		if method_config_util.get_diacritic(diacritic_key, base_level1, method_config) then
+		local ch = raw[i]
+		if method_config_util.get_diacritic(key, ch, method_config) then
 			return true
 		end
 	end
@@ -124,23 +134,23 @@ end
 
 --- Returns the cursor position in the character list
 --- @return integer the cursor position (1-based)
-function CursorWord:inserted_char()
+function WordEngine:inserted_char()
 	local p = _privates[self]
 	return p.raw[p.inserted_char_index]
 end
 
 --- Returns the cursor position in the character list (1-based)
 --- @return integer the cursor position (1-based)
-function CursorWord:length(raw)
+function WordEngine:length(raw)
 	return raw and _privates[self].raw_len or _privates[self].word_len
 end
 
-function CursorWord:get(raw)
+function WordEngine:get(raw)
 	local p = _privates[self]
 	return raw and p.raw or p.word
 end
 
-function CursorWord:remove_tone()
+function WordEngine:remove_tone(method_config)
 	local p = _privates[self]
 	local main_vowel, main_vowel_index = self:find_main_vowel()
 	if not main_vowel then
@@ -149,15 +159,17 @@ function CursorWord:remove_tone()
 
 	local vowel, removed_tone = util.strip_tone(main_vowel)
 	if not removed_tone then
+		-- add like a normal character
+		p.word = util.copy_list(p.raw) -- make a copy of the word
+		p.word_len = p.raw_len
 		return false
 	end
-
 	p.word[main_vowel_index] = vowel
 	return true
 end
 
 --- Processes tone marks in the word
-function CursorWord:processes_tone(method_config)
+function WordEngine:processes_tone(method_config)
 	local p = _privates[self]
 	local inserted_char_index = p.inserted_char_index
 
@@ -177,21 +189,26 @@ function CursorWord:processes_tone(method_config)
 	elseif removed_tone == tone_diacritic then
 		p.word = util.copy_list(p.raw) -- make a copy of the word)
 		p.word[main_vowel_index] = vowel
+		p.word_len = p.raw_len
 	else
 		-- no tone mark found,
 		-- or the tone mark is different from the one we want to apply
-		p.word[main_vowel_index] = util.combine_diacritic(vowel, tone_diacritic)
+		p.word[main_vowel_index] = util.merge_diacritic(vowel, tone_diacritic)
 	end
 	return true
 end
 
 --- Processes diacritics in the word
-function CursorWord:processes_diacritics(method_config)
+function WordEngine:processes_diacritic(method_config)
 	if not (self:analyzie_word_structure()) then
 		return false
 	end
 
 	local p = _privates[self]
+	local inserted_char = self:inserted_char()
+	if method_config_util.is_tone_removal_key(inserted_char) then
+		return self:remove_tone(method_config)
+	end
 
 	if method_config_util.is_tone_key(self:inserted_char(), method_config) then
 		return self:processes_tone(method_config)
@@ -199,7 +216,7 @@ function CursorWord:processes_diacritics(method_config)
 	return false
 end
 
-function CursorWord:decompose_word(level)
+function WordEngine:decompose_word(level)
 	local p = _privates[self]
 	local word, word_len = p.word, p.word_len
 	local result = {}
@@ -209,8 +226,8 @@ function CursorWord:decompose_word(level)
 		if dict then
 			result[#result + 1] = dict[1]
 
-			if level == 1 and dict.shape_diacritic then
-				result[#result + 1] = dict.shape_diacritic
+			if level == 1 and dict.shape then
+				result[#result + 1] = dict.shape
 			end
 
 			if dict.tone then
@@ -223,7 +240,7 @@ function CursorWord:decompose_word(level)
 	return result
 end
 
-function CursorWord:tostring(raw)
+function WordEngine:tostring(raw)
 	local p = _privates[self]
 	if raw then
 		return tbl_concat(p.raw)
@@ -250,10 +267,10 @@ local function find_main_vowel(chars, chars_size, i, j)
 	for k = i, j do
 		local char = chars[k]
 		-- Check for tone-marked vowels first
-		if util.has_tone(char) then
+		if util.has_tone_marked(char) then
 			return char, k
 		elseif util.is_vietnamese_vowel(char) then
-			local base_level2 = util.downgrade_to_level2(char)
+			local base_level2 = util.level(char, 2)
 			local priority = BASE_VOWEL_PRIORITY[base_level2]
 			if priority and priority < min_priority then
 				min_priority = priority
@@ -269,7 +286,8 @@ end
 --- Function to find main vowel
 --- @return string|nil the main vowel character if found, nil otherwise
 --- @return integer the index of the main vowel character if found, nil otherwise
-function CursorWord:find_main_vowel()
+function WordEngine:find_main_vowel()
+	self:analyzie_word_structure()
 	local p = _privates[self]
 	if p.vowel_start == -1 then
 		return nil, -1
@@ -277,89 +295,95 @@ function CursorWord:find_main_vowel()
 	return find_main_vowel(p.word, p.word_len, p.vowel_start, p.vowel_end)
 end
 
---- Check if all characters from i to j are vowels
---- @param word table The character table
---- @param i integer The starting index (1-based)
---- @param j integer The ending index (1-based)
---- @return boolean True if all characters are vowels, false otherwise
-local function is_all_vowel(word, i, j)
-	for k = i, j do
-		if not util.is_vietnamese_vowel(word[k]) then
-			return false
-		end
-	end
-	return true
-end
-
 --- Find the first and last vowel positions in a character table
---- @param word table The character table
---- @param len integer The length of the character table
+--- @param chars table The character table
+--- @param chars_size integer The length of the character table
 --- @return integer first The index of the first vowel (1-based)
 --- @return integer last The index of the last vowel (1-based)
 --- @return boolean is_single True if the first and last vowels are the same (single vowel), false otherwise
-local function find_vowel_sequence_bounds(word, len)
-	vim.notify("find_vowel_sequence_bounds called with word: " .. tbl_concat(word))
-	local first, last = -1, -1
+local function find_vowel_sequence_bounds(chars, chars_size)
+	local first, last = -1, -2
 
-	for i = 1, len do
-		if util.is_vietnamese_vowel(word[i]) then
+	-- Find the first and last vowel in the character table
+	for i = 1, chars_size do
+		if util.is_vietnamese_vowel(chars[i]) then
 			first = i
 			break
 		end
 	end
 
-	if not first then
-		return -1, -1, false
+	if first == -1 then
+		return first, last, false
 	end
 
-	for i = len, 1, -1 do
-		if util.is_vietnamese_vowel(word[i]) then
+	for i = chars_size, 1, -1 do
+		if util.is_vietnamese_vowel(chars[i]) then
 			last = i
 			break
 		end
 	end
 
-	if last - first + 1 > MAX_VOWEL_CLUSTERS_LENGTH or not is_all_vowel(word, first, last) then
-		return -1, -1, false
-	end
-
 	return first, last, first == last
 end
 
+--- Validate the vowel cluster in the character table
+--- @param chars table The character table
+--- @param chars_size integer The length of the character table
+--- @param vowel_start integer The index of the first vowel (1-based)
+--- @param vowel_end integer The index of the last vowel (1-based)
+--- @return boolean True if the vowel cluster is valid, false otherwise
+--- @note The vowel cluster is valid if:
+---
+---
+local function validate_vowel_cluster(chars, chars_size, vowel_start, vowel_end)
+	if
+		vowel_start - vowel_end + 1 > MAX_VOWEL_CLUSTERS_LENGTH
+		or not util.all_vowels(chars, chars_size, false, vowel_start, vowel_end)
+	then
+		return false
+	end
+	return true
+end
+
 --- Validate onset (consonant cluster) before the vowel
---- @param word table The character table
+--- @param chars table The character table
 --- @param vowel_start integer The index of the first vowel (1-based)
 --- @return boolean is_valid True if the consonant cluster is valid, false otherwise
 --- @return integer adjust The adjustment to the first vowel index (0 or 1)
-local function validate_consonant_cluster(word, vowel_start)
-	vim.notify("validate_consonant_cluster called with first_vowel_idx: " .. vowel_start)
+--- @note The consonant cluster is valid if:
+--- - It is empty (no consonant before the vowel)
+--- - It is a valid consonant cluster defined in the ONSETS table
+---
+--- @note If the consonant cluster overlaps with the vowel (e.g. "qu", "qo"), it is considered
+--- valid and the first vowel index is adjusted by 1.
+local function validate_onset_cluster(chars, vowel_start)
 	local cluster_len = vowel_start - 1
 	if cluster_len == 0 then
 		return true, 0
 	elseif cluster_len > MAX_CONSONANT_CLUSTERS_LENGTH then
 		return false, 0
-	elseif cluster_len == 1 and ONSETS[tbl_concat(word, "", 1, 2)] then
+	elseif cluster_len == 1 and ONSETS[tbl_concat(chars, "", 1, 2)] then
 		-- Special case: consonant overlaps with vowel
+		-- e.g "qu", "qo"
 		return true, 1
 	end
-	return ONSETS[tbl_concat(word, "", 1, cluster_len)] ~= nil, 0
+	return ONSETS[tbl_concat(chars, "", 1, cluster_len)] ~= nil, 0
 end
 
 --- Validate onset (consonant cluster) before the vowel
---- @param word table The character table
---- @param len integer The total length of the character table
+--- @param chars table The character table
+--- @param chars_size integer The total length of the character table
 --- @param vowel_end integer The index of the first vowel (1-based)
 --- @return boolean is_valid True if the consonant cluster is valid, false otherwise
-local function validate_coda_cluster(word, len, vowel_end)
-	vim.notify("validate_coda_cluster called with vowel_end: " .. vowel_end)
-	assert(vowel_end >= 1 and vowel_end <= len, "Invalid last vowel index")
-	local cluster_len = len - vowel_end
+local function validate_coda_cluster(chars, chars_size, vowel_end)
+	assert(vowel_end >= 1 and vowel_end <= chars_size, "Invalid last vowel index")
+	local cluster_len = chars_size - vowel_end
 	if cluster_len == 0 then
 		return true
 	elseif cluster_len > MAX_CODA_CLUSTERS_LENGTH then
 		return false
 	end
-	return CODAS[tbl_concat(word, "", vowel_end + 1, len)] ~= nil
+	return CODAS[tbl_concat(chars, "", vowel_end + 1, chars_size)] ~= nil
 end
 
 --- Ensure vowel indices are valid
@@ -370,9 +394,7 @@ end
 local function are_valid_vowel_indices(first, last, len)
 	if first < 1 or first > len then
 		return false
-	elseif last < 1 or last > len then
-		return false
-	elseif last < first then
+	elseif last < first or last > len then
 		return false
 	end
 	return true
@@ -380,8 +402,14 @@ end
 
 --- Analyze structure of Vietnamese word (onset + vowel cluster)
 --- @return boolean True if the word structure is analizing succeed
-function CursorWord:analyzie_word_structure()
+function WordEngine:analyzie_word_structure(force)
 	local p = _privates[self]
+
+	if not force and p.analyzed then
+		return true -- already analyzed
+	end
+	p.analyzed = true
+
 	local word, len = p.word, p.word_len
 	if len == 1 then
 		-- Single character word
@@ -391,25 +419,25 @@ function CursorWord:analyzie_word_structure()
 
 	local first, last, _ = find_vowel_sequence_bounds(word, len)
 	if not are_valid_vowel_indices(first, last, len) then
-		vim.notify("Invalid vowel indices in word: " .. tbl_concat(word))
 		return false
 	end
 
-	local is_valid, adjust = validate_consonant_cluster(word, first)
+	if not validate_vowel_cluster(word, len, first, last) then
+		return false
+	end
+
+	local is_valid, adjust = validate_onset_cluster(word, first)
 	if not is_valid then
-		vim.notify("Invalid consonant cluster in word: " .. tbl_concat(word))
 		return false
 	end
 
 	first = first + adjust
 	if not are_valid_vowel_indices(first, last, len) then
-		vim.notify("Invalid vowel indices in word: " .. tbl_concat(word))
 		-- The word with no vowel
 		return false
 	end
 
 	if not validate_coda_cluster(word, len, last) then
-		vim.notify("Invalid coda cluster in word: " .. tbl_concat(word))
 		return false
 	end
 
@@ -420,7 +448,7 @@ function CursorWord:analyzie_word_structure()
 end
 
 --- Function to validate Vietnamese word structure
-function CursorWord:is_valid_vietnamese_word()
+function WordEngine:is_valid_vietnamese_word()
 	return not self:analyzie_word_structure()
 end
 
@@ -428,7 +456,7 @@ end
 --- @param cursor_col integer The current column position of the cursor
 --- @return integer start The start column boundary of the cursor position
 --- @return integer end The end column boundary of the cursor position (exclusive)
-function CursorWord:column_boundaries(cursor_col)
+function WordEngine:column_boundaries(cursor_col)
 	local p = _privates[self]
 	local raw = p.raw
 	local cursor_char_index = p.cursor_char_index
@@ -444,4 +472,4 @@ function CursorWord:column_boundaries(cursor_col)
 	return start, end_
 end
 
-return CursorWord
+return WordEngine
