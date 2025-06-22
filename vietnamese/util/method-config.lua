@@ -2,7 +2,6 @@ local util = require("vietnamese.util")
 local CONSTANT = require("vietnamese.constant")
 local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VN_CHAR_DICT
 local DIACRITIC_MAP = CONSTANT.DIACRITIC_MAP
-local list_contains = vim.list_contains
 
 local M = {}
 
@@ -20,8 +19,18 @@ function M.is_shape_key(key, method_config)
 	return false
 end
 
+--- Check if a key is a tone removal key.
+--- This function checks if the key is in the list of tone removal keys defined in the method configuration.
+--- @param key string The key pressed by the user.
+--- @param method_config table The method configuration containing tone removal keys.
+--- @return boolean True if the key is a tone removal key, false otherwise.
 function M.is_tone_removal_key(key, method_config)
-	return list_contains(method_config.tone_remove_keys, key:lower())
+	for _, v in ipairs(method_config.tone_removal_keys) do
+		if v == key:lower() then
+			return true
+		end
+	end
+	return false
 end
 
 --- Get the tone diacritic for a given key and base character.
@@ -29,7 +38,7 @@ end
 --- @param key string The key pressed by the user.
 --- @param base_char string The base character to which the diacritic is applied.
 --- @param method_config table The method configuration containing tone keys.
---- @param strict boolean If true, uses the base character as is; if false, uses the level 2 form of the base character.
+--- @param strict boolean|nil If true, uses the base character as is; if false, uses the level 2 form of the base character.
 --- @return 1|2|3|4|5|nil The tone ENUM_DIACRITIC
 function M.get_tone_diacritic(key, base_char, method_config, strict)
 	base_char = strict and base_char or util.level(base_char, 2)
@@ -65,11 +74,7 @@ function M.get_diacritic(key, base_char, method_config, strict)
 
 	if diacritic then
 		return diacritic
-	elseif
-		M.is_tone_removal_key(key, method_config)
-		and UTF8_VN_CHAR_DICT[base_char]
-		and UTF8_VN_CHAR_DICT[base_char].tone
-	then
+	elseif M.is_tone_removal_key(key, method_config) and util.has_tone_marked(base_char) then
 		return CONSTANT.ENUM_DIACRITIC.TONE_REMOVAL
 	end
 	return nil

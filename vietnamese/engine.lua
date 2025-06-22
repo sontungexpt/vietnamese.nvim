@@ -6,17 +6,17 @@ local nvim_win_get_cursor, nvim_win_set_cursor, nvim_buf_set_text, nvim_buf_get_
 
 local require = require
 local util = require("vietnamese.util")
+local config = require("vietnamese.config")
 local is_vietnamese_char = util.is_vietnamese_char
 local reverse_tbl = util.reverse_list
 
 local THRESHOLD_WORD_LEN = 10
+local METHOD_CONFIG_PATH = "vietnamese.method."
 
 local SUPPORTED_METHODS = {
 	telex = true,
 	vni = true,
 }
-
-local METHOD_CONFIG_PATH = "vietnamese.method."
 
 -- vietnamese_input/engine.lua
 local M = {}
@@ -26,7 +26,7 @@ local function is_diacritic_pressed(char, method_config)
 	if type(method_config.is_diacritic_pressed) == "function" then
 		return method_config.is_diacritic_pressed(char)
 	end
-	local method_util = require("vietnamese.method-config-util")
+	local method_util = require("vietnamese.util.method-config")
 	if method_util.is_tone_key(char, method_config) then
 		return true
 	elseif method_util.is_tone_removal_key(char, method_config) then
@@ -38,7 +38,7 @@ local function is_diacritic_pressed(char, method_config)
 end
 
 function M.get_config()
-	return require("vietnamese.config").get_config()
+	return config.get_config()
 end
 
 function M.get_method_config()
@@ -221,6 +221,9 @@ M.setup = function()
 		"TextChangedI",
 	}, {
 		callback = function(args)
+			if not config.is_enabled() then
+				return
+			end
 			if args.event == "InsertCharPre" then
 				inserted_char = vim.v.char
 				inserting = true
@@ -263,9 +266,10 @@ M.setup = function()
 			-- -- Save cursor position relative to word
 			-- local relative_pos = col - word_start
 
-			local w_start, w_end = cursor_word:column_boundaries(col_0based)
+			local bytoffset_start, byteoffset_end =
+				cursor_word:byteoffset_boundaries(util.col_to_byteoffset(args.buf, row_0based, col_0based))
 
-			nvim_buf_set_text(0, row_0based, w_start, row_0based, w_end, { new_word })
+			nvim_buf_set_text(0, row_0based, bytoffset_start, row_0based, byteoffset_end, { new_word })
 
 			-- -- Restore cursor position
 			nvim_win_set_cursor(0, { row, col_before_insert })

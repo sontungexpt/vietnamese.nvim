@@ -84,14 +84,31 @@ end
 --- @param c string The character to check
 --- @return boolean True if the character has a tone, false otherwise
 M.has_tone_marked = function(c)
-	assert(c, "c must not be nil")
 	return UTF8_VN_CHAR_DICT[c] ~= nil and UTF8_VN_CHAR_DICT[c].tone ~= nil
+end
+
+--- Attach a tone to a level 2 Vietnamese character
+--- @param lv2_c string The level 2 character to attach the tone to
+--- @param tone ENUM_DIACRITIC The tone to attach_tone_to_lv2_char
+--- @return string The character with the attached tone, or the original character if no tone was found
+--- @return boolean True if the tone was successfully attached, false otherwise
+M.merge_tone_to_lv2_vowel = function(lv2_c, tone)
+	assert(lv2_c ~= nil, "c must not be nil")
+	assert(tone ~= nil, "tone must not be nil")
+	local tone_map = DIACRITIC_MAP[lv2_c]
+
+	if not tone_map then
+		-- not a valid char
+		return lv2_c, false
+	end
+	local result = tone_map[tone]
+	return result or lv2_c, result ~= nil
 end
 
 --- Merge a diacritic into a character
 --- @param c string The character to merge the diacritic into
 --- @param diacritic string The diacritic to merge
---- @param force boolean If true, forces the merge even if the diacritic is not applicable
+--- @param force boolean|nil If true, forces the merge even if the diacritic is not applicable
 --- @return string The character with the merged diacritic, or the original character if no merge was possible
 --- @return ENUM_DIACRITIC|nil The original diacritic if it was replaced, or nil if no replace was possible
 M.merge_diacritic = function(c, diacritic, force)
@@ -153,7 +170,7 @@ end
 
 --- Strip the tone from a character
 --- @param c string The character to strip the tone from
---- @return string The character without the tone, or the original character if no tone was found
+--- @return string The character without the tone (lv2 char), or the original character if no tone was found
 --- @return ENUM_DIACRITIC|nil The tone if it was stripped, or nil if no tone was found
 M.strip_tone = function(c)
 	local dict = UTF8_VN_CHAR_DICT[c]
@@ -182,6 +199,27 @@ function M.some_vowels(chars, chars_size, strict)
 		end
 	end
 	return false
+end
+
+--- Check if all characters from i to j are vowels
+--- @param chars table The character table
+--- @param chars_size integer The size of the character table
+--- @param i integer The starting index (1-based)
+--- @param j integer The ending index (1-based)
+--- @return boolean True if all characters are vowels, false otherwise
+function M.all_vowels(chars, chars_size, strict, i, j)
+	assert(chars, "chars must not be nil")
+	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
+
+	i = i and i > 0 and i or 1
+	j = j and j < chars_size and j or chars_size
+
+	for k = i, j do
+		if not M.is_vietnamese_vowel(chars[k], strict) then
+			return false
+		end
+	end
+	return true
 end
 
 function M.get_repetition_time_vowel(char, rejected_accent)
@@ -235,33 +273,15 @@ function M.copy_list(list)
 	return copy
 end
 
-function M.col_to_byteoffset(bufnr, line0based, col0based)
-	local text_chunk = nvim_buf_get_text(bufnr, line0based, 0, line0based, col0based, {})[1]
-	if not text_chunk then
-		return 1
-	end
-	return #text_chunk + 1
-end
-
---- Check if all characters from i to j are vowels
---- @param chars table The character table
---- @param chars_size integer The size of the character table
---- @param i integer The starting index (1-based)
---- @param j integer The ending index (1-based)
---- @return boolean True if all characters are vowels, false otherwise
-function M.all_vowels(chars, chars_size, strict, i, j)
-	assert(chars, "chars must not be nil")
-	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
-
-	i = i and i > 0 and i or 1
-	j = j and j < chars_size and j or chars_size
-
-	for k = i, j do
-		if not M.is_vietnamese_vowel(chars[k], strict) then
-			return false
-		end
-	end
-	return true
+--- Get the byte offset of a column in a row of buffers
+--- @param bufnr number: Buffer number
+--- @param row0based number: Line number (0-based)
+--- @param col0based number: Column number (0-based)
+--- @return number: Byte offset of the column in the line
+function M.col_to_byteoffset(bufnr, row0based, col0based)
+	--- byteoffset is start from 0
+	local byteoffset = #(nvim_buf_get_text(bufnr, row0based, 0, row0based, col0based, {})[1] or "")
+	return byteoffset
 end
 
 return M

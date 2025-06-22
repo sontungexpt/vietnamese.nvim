@@ -4,19 +4,15 @@ local CONSTANT = require("vietnamese.constant")
 
 local ONSETS = CONSTANT.ONSETS
 local CODAS = CONSTANT.CODAS
-
-local MAX_VOWEL_CLUSTERS_LENGTH = 3
-local MAX_CODA_CLUSTERS_LENGTH = 2
-local MAX_CONSONANT_CLUSTERS_LENGTH = 3
--- local ENUM_DIACRITIC = CONSTANT.ENUM_DIACRITIC
--- local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VN_CHAR_DICT
--- local TONE_PLACEMENT = CONSTANT.TONE_PLACEMENT
--- local VOWEL_SEQUENCES = CONSTANT.VOWEL_SEQUENCES
 local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VN_CHAR_DICT
 local BASE_VOWEL_PRIORITY = CONSTANT.BASE_VOWEL_PRIORITY
 
+local TRIPTHONGS_LENGTH = 3
+local MAX_CODA_CLUSTERS_LENGTH = 2
+local MAX_CONSONANT_CLUSTERS_LENGTH = 3
+
 local util = require("vietnamese.util")
-local method_config_util = require("vietnamese.method-config-util")
+local method_config_util = require("vietnamese.util.method-config")
 
 ---@class WordEngine
 ---@field private word table A table of characters representing the word
@@ -32,7 +28,7 @@ local WordEngine = {}
 WordEngine.__index = WordEngine
 
 -- Creates a new CursorWord instancecur
---- @class CursorWord
+--- @class WordEngine
 --- @property word table A table of characters representing the word
 local _privates = setmetatable({}, { __mode = "k" }) -- use weak table to store private data
 
@@ -77,7 +73,9 @@ function WordEngine:new(raw, cursor_char_index, insertion, raw_len)
 		cursor_char_index = cursor_char_index,
 
 		analyzed = false, -- whether the word structure has been analyzed
+		analyzed_success = false, -- whether the word structure is valid
 
+		vowel_start_adjust = 0, -- adjust the vowel start index if the onset overlaps with the vowel
 		vowel_start = -1,
 		vowel_end = -2, -- -2 to make sure that it is not valid when loop from start to end
 	}
@@ -133,7 +131,7 @@ function WordEngine:is_potential_diacritic_key(key, method_config)
 end
 
 --- Returns the cursor position in the character list
---- @return integer the cursor position (1-based)
+--- @return string the character at the cursor position
 function WordEngine:inserted_char()
 	local p = _privates[self]
 	return p.raw[p.inserted_char_index]
@@ -193,7 +191,7 @@ function WordEngine:processes_tone(method_config)
 	else
 		-- no tone mark found,
 		-- or the tone mark is different from the one we want to apply
-		p.word[main_vowel_index] = util.merge_diacritic(vowel, tone_diacritic)
+		p.word[main_vowel_index] = util.merge_tone_to_lv2_vowel(vowel, tone_diacritic)
 	end
 	return true
 end
@@ -203,14 +201,14 @@ function WordEngine:processes_diacritic(method_config)
 	if not (self:analyzie_word_structure()) then
 		return false
 	end
-
-	local p = _privates[self]
+	-- local p = _privates[self]
+	--
 	local inserted_char = self:inserted_char()
-	if method_config_util.is_tone_removal_key(inserted_char) then
+	if method_config_util.is_tone_removal_key(inserted_char, method_config) then
 		return self:remove_tone(method_config)
 	end
 
-	if method_config_util.is_tone_key(self:inserted_char(), method_config) then
+	if method_config_util.is_tone_key(inserted_char, method_config) then
 		return self:processes_tone(method_config)
 	end
 	return false
@@ -248,24 +246,41 @@ function WordEngine:tostring(raw)
 	return tbl_concat(p.word)
 end
 
---- Finds the main vowel in the character list
---- @param chars table the character list to search
---- @param chars_size integer the length of the character list
---- @param i integer the starting index (1-based, optional)
---- @param j integer the ending index (1-based, optional)
+--- Calculates the length of a vowel cluster
+--- @param vowel_start integer The index of the first vowel (1-based)
+--- @param vowel_end integer The index of the last vowel (1-based)
+--- @return integer The length of the vowel cluster_len
+local function caculate_vowel_length(vowel_start, vowel_end)
+	return vowel_end - vowel_start + 1
+end
+
+--- Function to find main vowel
 --- @return string|nil the main vowel character if found, nil otherwise
---- @return integer the index of the main vowel character in the word if found, -1 otherwise
-local function find_main_vowel(chars, chars_size, i, j)
-	-- Find base vowels with highest priority
-	local candidate_char = nil
-	local candidate_index = -1
+--- @return integer the index of the main vowel character if found, nil otherwise
+function WordEngine:find_main_vowel()
+	self:analyzie_word_structure()
+
+	local p = _privates[self]
+	if p.vowel_start == -1 then
+		return nil, -1
+	end
+
+	local vowel_start, vowel_end = p.vowel_start, p.vowel_end
+	local vowel_length = caculate_vowel_length(vowel_start, vowel_end)
+
+	if vowel_length == 1 then
+		return p.word[vowel_start], vowel_start
+	elseif vowel_length == TRIPTHONGS_LENGTH then
+		local main_vowel_index = vowel_start + 1
+		return p.word[main_vowel_index], main_vowel_index
+	end
+
+	local word = p.word
+	local main_vowel_index = -1
 	local min_priority = 100
 
-	i = i and i > 0 and i or 1
-	j = j and j < chars_size and j or chars_size
-
-	for k = i, j do
-		local char = chars[k]
+	for k = vowel_start, vowel_end do
+		local char = word[k]
 		-- Check for tone-marked vowels first
 		if util.has_tone_marked(char) then
 			return char, k
@@ -274,25 +289,13 @@ local function find_main_vowel(chars, chars_size, i, j)
 			local priority = BASE_VOWEL_PRIORITY[base_level2]
 			if priority and priority < min_priority then
 				min_priority = priority
-				candidate_char = char
-				candidate_index = k
+				main_vowel_index = k
 			end
 		end
 	end
+	return word[main_vowel_index], main_vowel_index
 
-	return candidate_char, candidate_index
-end
-
---- Function to find main vowel
---- @return string|nil the main vowel character if found, nil otherwise
---- @return integer the index of the main vowel character if found, nil otherwise
-function WordEngine:find_main_vowel()
-	self:analyzie_word_structure()
-	local p = _privates[self]
-	if p.vowel_start == -1 then
-		return nil, -1
-	end
-	return find_main_vowel(p.word, p.word_len, p.vowel_start, p.vowel_end)
+	-- return find_main_vowel(p.word, p.word_len, vowel_start, vowel_end)
 end
 
 --- Find the first and last vowel positions in a character table
@@ -337,7 +340,7 @@ end
 ---
 local function validate_vowel_cluster(chars, chars_size, vowel_start, vowel_end)
 	if
-		vowel_start - vowel_end + 1 > MAX_VOWEL_CLUSTERS_LENGTH
+		caculate_vowel_length(vowel_start, vowel_end) > TRIPTHONGS_LENGTH
 		or not util.all_vowels(chars, chars_size, false, vowel_start, vowel_end)
 	then
 		return false
@@ -406,50 +409,69 @@ function WordEngine:analyzie_word_structure(force)
 	local p = _privates[self]
 
 	if not force and p.analyzed then
-		return true -- already analyzed
+		return p.analyzed_success
 	end
 	p.analyzed = true
-
 	local word, len = p.word, p.word_len
+
 	if len == 1 then
 		-- Single character word
 		-- no need to analyze, it's a valid word
+		p.analyzed_success = true
 		return true
 	end
 
 	local first, last, _ = find_vowel_sequence_bounds(word, len)
 	if not are_valid_vowel_indices(first, last, len) then
+		p.analyzed_success = false
 		return false
 	end
 
 	if not validate_vowel_cluster(word, len, first, last) then
+		p.analyzed_success = false
 		return false
 	end
 
 	local is_valid, adjust = validate_onset_cluster(word, first)
 	if not is_valid then
+		p.analyzed_success = false
 		return false
 	end
 
 	first = first + adjust
 	if not are_valid_vowel_indices(first, last, len) then
 		-- The word with no vowel
+		p.analyzed_success = false
 		return false
 	end
+	p.vowel_start_adjust = adjust
 
 	if not validate_coda_cluster(word, len, last) then
+		p.analyzed_success = false
 		return false
 	end
 
 	p.vowel_start = first
 	p.vowel_end = last
+	p.analyzed_success = true
 
 	return true
 end
 
---- Function to validate Vietnamese word structure
+--- Checks if the word is a valid Vietnamese word
+--- @return boolean True if the word is a valid Vietnamese word, false otherwise
 function WordEngine:is_valid_vietnamese_word()
-	return not self:analyzie_word_structure()
+	local p = _privates[self]
+	if p.word_len == 1 then
+		return util.is_vietnamese_char(p.word[1])
+	end
+	self:analyzie_word_structure()
+
+	if p.vowel_start < 1 then
+		return false
+	end
+
+	return true
 end
 
 --- Returns the column boundaries of the cursor position
@@ -468,6 +490,28 @@ function WordEngine:column_boundaries(cursor_col)
 	end
 
 	local end_ = cursor_col + #tbl_concat(raw, "", cursor_char_index, p.raw_len)
+
+	return start, end_
+end
+
+--- Returns the byte offset boundaries of the cursor position
+--- @param cursor_col_byteoffset integer The current byte offset of the cursor pos
+--- @return integer start The start byte offset boundary of the cursor position
+--- @return integer end The end byte offset boundary of the cursor position (exclusive)
+function WordEngine:byteoffset_boundaries(cursor_col_byteoffset)
+	local p = _privates[self]
+	local raw = p.raw
+	local cursor_char_index = p.cursor_char_index
+
+	local start = cursor_col_byteoffset - #tbl_concat(raw, "", 1, cursor_char_index - 1)
+
+	if cursor_char_index > p.raw_len then
+		vim.notify(start .. " to " .. cursor_col_byteoffset)
+		return start, cursor_col_byteoffset
+	end
+
+	local end_ = cursor_col_byteoffset + #tbl_concat(raw, "", cursor_char_index, p.raw_len)
+	vim.notify(start .. " to " .. end_)
 
 	return start, end_
 end
