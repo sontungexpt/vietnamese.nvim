@@ -13,6 +13,7 @@ local DIACRITIC_HORN = 8
 local DIACRITIC_HORIZONTAL_STROKE = 9
 
 M = {
+	--- @enum ENUM_DIACRITIC
 	ENUM_DIACRITIC = {
 		TONE_REMOVAL = DIACRITIC_TONE_REMOVAL,
 		ACUTE = DIACRITIC_ACUTE,
@@ -56,7 +57,9 @@ M = {
 
 		["y"] = 12,
 	},
-	-- [1] is the base vowel
+	--- @type table<string, { [1]: string, [2]: string?, [3]: string?, tone?: ENUM_DIACRITIC }>
+	--- UTF8_VN_CHAR_DICT maps a Vietnamese character with tone/diacritic
+	--- to its components: [base, shape, tone], and optionally a tone enum.
 	UTF8_VN_CHAR_DICT = {
 		["á"] = { "a", "a", tone = DIACRITIC_ACUTE, up = "Á" },
 		["à"] = { "a", "a", tone = DIACRITIC_GRAVE, up = "À" },

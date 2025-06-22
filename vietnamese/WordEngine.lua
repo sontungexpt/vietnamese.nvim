@@ -14,23 +14,28 @@ local MAX_CONSONANT_CLUSTERS_LENGTH = 3
 local util = require("vietnamese.util")
 local method_config_util = require("vietnamese.util.method-config")
 
----@class WordEngine
----@field private word table A table of characters representing the word
----@field private word_len number The total number of characters in the word without the
----@field private raw table A table of characters representing the original word @field private raw_len number The total number of characters in the original word
----
----@field private inserted_char_index number The index of the cursor position in the character lis (1-based)
----@field private vowel_start number The index of the first vowel in the word (1-based)
----@field private vowel_end number The index of the last vowel in the word (1-based)
+--- @class WordEngine
+--- Represents a Vietnamese word. Provides utilities for analyzing vowel clusters,
+--- determining the main vowel, and applying tone marks. Supports cursor-based character insertion.
 local WordEngine = {}
 
 -- allow to access public methods and properties
 WordEngine.__index = WordEngine
 
--- Creates a new CursorWord instancecur
---- @class WordEngine
---- @property word table A table of characters representing the word
-local _privates = setmetatable({}, { __mode = "k" }) -- use weak table to store private data
+--- Stores internal fields for each WordEngine instance
+--- @class PrivateWordEngineFields
+--- @field word string[] List of characters for processing
+--- @field word_len number Length of `word`
+--- @field raw string[] Original list of characters before modification
+--- @field raw_len number Length of `raw`
+--- @field inserted_char_index number? Index of the recently inserted character (if any)
+--- @field cursor_char_index number Current cursor position (1-based)
+--- @field vowel_start number Index of the start of the vowel cluster (1-based)
+--- @field vowel_end number Index of the end of the vowel cluster (1-based)
+--- @field vowel_start_adjust number Offset if the onset overlaps with the vowel cluster
+--- @field analyzed boolean Whether the word structure has been analyzed
+--- @field analyzed_success boolean Whether the analysis was successful
+local _privates = setmetatable({}, { __mode = "k" }) --- @type table<WordEngine, PrivateWordEngineFields>
 
 local function filter_inserted_char(raw, raw_len, inserted_char_index)
 	local filtered = {}
@@ -84,10 +89,10 @@ function WordEngine:new(raw, cursor_char_index, insertion, raw_len)
 	return obj
 end
 
-function WordEngine:iter_chars(cb, raw)
+function WordEngine:iter_chars(cb, use_raw)
 	local p = _privates[self]
-	local chars = raw and p.raw or p.word
-	local length = raw and p.raw_len or p.word_len
+	local chars = use_raw and p.raw or p.word
+	local length = use_raw and p.raw_len or p.word_len
 
 	for i = 1, length, 1 do
 		local char = chars[i]
@@ -115,8 +120,8 @@ end
 --- @param method_config table|nil the method configuration to use for checking
 --- @return boolean true if the diacritic can be applied, false otherwise
 function WordEngine:is_potential_diacritic_key(key, method_config)
-	assert(key, "diacritic_key must not be nil")
-	assert(method_config, "method_config must not be nil")
+	assert(key ~= nil, "diacritic_key must not be nil")
+	assert(type(method_config) == "table", "method_config must not be nil")
 
 	local p = _privates[self]
 	local raw = p.raw
@@ -139,13 +144,13 @@ end
 
 --- Returns the cursor position in the character list (1-based)
 --- @return integer the cursor position (1-based)
-function WordEngine:length(raw)
-	return raw and _privates[self].raw_len or _privates[self].word_len
+function WordEngine:length(use_raw)
+	return use_raw and _privates[self].raw_len or _privates[self].word_len
 end
 
-function WordEngine:get(raw)
+function WordEngine:get(use_raw)
 	local p = _privates[self]
-	return raw and p.raw or p.word
+	return use_raw and p.raw or p.word
 end
 
 function WordEngine:remove_tone(method_config)
@@ -170,8 +175,6 @@ end
 function WordEngine:processes_tone(method_config)
 	local p = _privates[self]
 	local inserted_char_index = p.inserted_char_index
-
-	-- local decomposed_word = self:decompose_word(2)
 
 	local main_vowel, main_vowel_index = self:find_main_vowel()
 	if not main_vowel then
@@ -506,13 +509,9 @@ function WordEngine:byteoffset_boundaries(cursor_col_byteoffset)
 	local start = cursor_col_byteoffset - #tbl_concat(raw, "", 1, cursor_char_index - 1)
 
 	if cursor_char_index > p.raw_len then
-		vim.notify(start .. " to " .. cursor_col_byteoffset)
 		return start, cursor_col_byteoffset
 	end
-
 	local end_ = cursor_col_byteoffset + #tbl_concat(raw, "", cursor_char_index, p.raw_len)
-	vim.notify(start .. " to " .. end_)
-
 	return start, end_
 end
 

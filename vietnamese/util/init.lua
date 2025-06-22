@@ -266,11 +266,7 @@ function M.decompose_char(c)
 end
 
 function M.copy_list(list)
-	local copy = {}
-	for i = 1, #list do
-		copy[i] = list[i]
-	end
-	return copy
+	return { table.unpack(list) }
 end
 
 --- Get the byte offset of a column in a row of buffers
