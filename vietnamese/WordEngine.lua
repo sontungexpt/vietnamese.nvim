@@ -4,7 +4,7 @@ local CONSTANT = require("vietnamese.constant")
 
 local ONSETS = CONSTANT.ONSETS
 local CODAS = CONSTANT.CODAS
-local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VN_CHAR_DICT
+local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VNCHAR_COMPONENT
 local BASE_VOWEL_PRIORITY = CONSTANT.BASE_VOWEL_PRIORITY
 
 local TRIPTHONGS_LENGTH = 3
@@ -307,7 +307,7 @@ end
 --- @return integer first The index of the first vowel (1-based)
 --- @return integer last The index of the last vowel (1-based)
 --- @return boolean is_single True if the first and last vowels are the same (single vowel), false otherwise
-local function find_vowel_sequence_bounds(chars, chars_size)
+local function find_vowel_seq_bounds(chars, chars_size)
 	local first, last = -1, -2
 
 	-- Find the first and last vowel in the character table
@@ -355,25 +355,40 @@ end
 --- @param chars table The character table
 --- @param vowel_start integer The index of the first vowel (1-based)
 --- @return boolean is_valid True if the consonant cluster is valid, false otherwise
---- @return integer adjust The adjustment to the first vowel index (0 or 1)
+--- @return integer onset_end The index of the end of the onset cluster (1-based)
 --- @note The consonant cluster is valid if:
 --- - It is empty (no consonant before the vowel)
 --- - It is a valid consonant cluster defined in the ONSETS table
 ---
 --- @note If the consonant cluster overlaps with the vowel (e.g. "qu", "qo"), it is considered
 --- valid and the first vowel index is adjusted by 1.
-local function validate_onset_cluster(chars, vowel_start)
+local function detect_onset_cluster(chars, vowel_start, vowel_end)
 	local cluster_len = vowel_start - 1
 	if cluster_len == 0 then
-		return true, 0
+		return true, cluster_len
 	elseif cluster_len > MAX_CONSONANT_CLUSTERS_LENGTH then
-		return false, 0
-	elseif cluster_len == 1 and ONSETS[tbl_concat(chars, "", 1, 2)] then
+		return false, cluster_len
+	elseif cluster_len == 1 and vowel_end > vowel_start and ONSETS[tbl_concat(chars, "", 1, 2)] then
 		-- Special case: consonant overlaps with vowel
-		-- e.g "qu", "qo"
-		return true, 1
+		-- e.g "qu", "gi"
+		return true, vowel_start
 	end
 	return ONSETS[tbl_concat(chars, "", 1, cluster_len)] ~= nil, 0
+end
+
+--- Fix the onset and vowel conflicts
+--- @param onset_end integer The index of the end of the onset cluster (1-based)
+--- @param vowel_start integer The index of the first vowel (1-based)
+--- @param vowel_end integer The index of the last vowel (1-based)
+--- @return integer The adjusted index of the first vowel (1-based)
+--- @return integer The index of the last vowel (1-based)
+local function fix_onset_vowel_conflict(onset_end, vowel_start, vowel_end)
+	if onset_end < vowel_start then
+		return vowel_start, vowel_end
+	elseif onset_end + 1 > vowel_end then
+		return -1, -2 -- No vowel found
+	end
+	return onset_end + 1, vowel_end
 end
 
 --- Validate onset (consonant cluster) before the vowel
@@ -424,38 +439,37 @@ function WordEngine:analyzie_word_structure(force)
 		return true
 	end
 
-	local first, last, _ = find_vowel_sequence_bounds(word, len)
-	if not are_valid_vowel_indices(first, last, len) then
+	local vowel_start, vowel_end, _ = find_vowel_seq_bounds(word, len)
+	if not are_valid_vowel_indices(vowel_start, vowel_end, len) then
 		p.analyzed_success = false
 		return false
 	end
 
-	if not validate_vowel_cluster(word, len, first, last) then
+	if not validate_vowel_cluster(word, len, vowel_start, vowel_end) then
 		p.analyzed_success = false
 		return false
 	end
 
-	local is_valid, adjust = validate_onset_cluster(word, first)
-	if not is_valid then
+	local valid, onset_end = detect_onset_cluster(word, vowel_start)
+	if not valid then
 		p.analyzed_success = false
 		return false
 	end
-
-	first = first + adjust
-	if not are_valid_vowel_indices(first, last, len) then
+	vowel_start, vowel_end = fix_onset_vowel_conflict(onset_end, vowel_start, vowel_end)
+	if vowel_start < 1 then
 		-- The word with no vowel
 		p.analyzed_success = false
 		return false
 	end
-	p.vowel_start_adjust = adjust
+	p.vowel_start_adjust = onset_end
 
-	if not validate_coda_cluster(word, len, last) then
+	if not validate_coda_cluster(word, len, vowel_end) then
 		p.analyzed_success = false
 		return false
 	end
 
-	p.vowel_start = first
-	p.vowel_end = last
+	p.vowel_start = vowel_start
+	p.vowel_end = vowel_end
 	p.analyzed_success = true
 
 	return true

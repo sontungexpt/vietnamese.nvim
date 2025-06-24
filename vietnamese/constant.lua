@@ -57,10 +57,10 @@ M = {
 
 		["y"] = 12,
 	},
-	--- @type table<string, { [1]: string, [2]: string?, [3]: string?, tone?: ENUM_DIACRITIC }>
+	--- @type table<string, { [1]: string, [2]: string?, [3]: string?, tone?: ENUM_DIACRITIC, shape?: ENUM_DIACRITIC, up: string, lo: string }>
 	--- UTF8_VN_CHAR_DICT maps a Vietnamese character with tone/diacritic
 	--- to its components: [base, shape, tone], and optionally a tone enum.
-	UTF8_VN_CHAR_DICT = {
+	UTF8_VNCHAR_COMPONENT = {
 		["á"] = { "a", "a", tone = DIACRITIC_ACUTE, up = "Á" },
 		["à"] = { "a", "a", tone = DIACRITIC_GRAVE, up = "À" },
 		["ả"] = { "a", "a", tone = DIACRITIC_HOOK, up = "Ả" },
@@ -181,7 +181,7 @@ M = {
 		["Ị"] = { "I", "I", tone = DIACRITIC_DOT, lo = "ị" },
 
 		["Ó"] = { "O", "O", tone = DIACRITIC_ACUTE, lo = "ó" },
-		["Ò"] = { "O", "O", tone = "TONE_GRAVE", lo = "ò" },
+		["Ò"] = { "O", "O", tone = DIACRITIC_GRAVE, lo = "ò" },
 		["Ỏ"] = { "O", "O", tone = DIACRITIC_HOOK, lo = "ỏ" },
 		["Õ"] = { "O", "O", tone = DIACRITIC_TILDE, lo = "õ" },
 		["Ọ"] = { "O", "O", tone = DIACRITIC_DOT, lo = "ọ" },
@@ -201,19 +201,19 @@ M = {
 		["Ợ"] = { "O", "Ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_DOT, lo = "ợ" },
 
 		["Ú"] = { "U", "U", tone = DIACRITIC_ACUTE, lo = "ú" },
-		["Ù"] = { "U", "U", tone = "TONE_GRAVE", lo = "ù" },
+		["Ù"] = { "U", "U", tone = DIACRITIC_GRAVE, lo = "ù" },
 		["Ủ"] = { "U", "U", tone = DIACRITIC_HOOK, lo = "ủ" },
 		["Ũ"] = { "U", "U", tone = DIACRITIC_TILDE, lo = "ũ" },
 		["Ụ"] = { "U", "U", tone = DIACRITIC_DOT, lo = "ụ" },
 
 		["Ư"] = { "U", "Ư", shape = DIACRITIC_HORN, lo = "ư" },
-		["Ứ"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = "TONE_ACUTE", lo = "ứ" },
-		["Ừ"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = "TONE_GRAVE", lo = "ừ" },
-		["Ử"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = "TONE_HOOK", lo = "ử" },
-		["Ữ"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = "TONE_TILDE", lo = "ữ" },
-		["Ự"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = "TONE_DOT", lo = "ự" },
+		["Ứ"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_ACUTE, lo = "ứ" },
+		["Ừ"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_GRAVE, lo = "ừ" },
+		["Ử"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_HOOK, lo = "ử" },
+		["Ữ"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_TILDE, lo = "ữ" },
+		["Ự"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_DOT, lo = "ự" },
 
-		["Ý"] = { "Y", "Y", tone = "TONE_ACUTE", lo = "ý" },
+		["Ý"] = { "Y", "Y", tone = DIACRITIC_ACUTE, lo = "ý" },
 		["Ỳ"] = { "Y", "Y", tone = DIACRITIC_GRAVE, lo = "ỳ" },
 		["Ỷ"] = { "Y", "Y", tone = DIACRITIC_HOOK, lo = "ỷ" },
 		["Ỹ"] = { "Y", "Y", tone = DIACRITIC_TILDE, lo = "ỹ" },

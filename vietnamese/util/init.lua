@@ -4,7 +4,7 @@ local nvim_buf_get_text = api.nvim_buf_get_text
 local tbl_concat = table.concat
 
 local CONSTANT = require("vietnamese.constant")
-local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VN_CHAR_DICT
+local UTF8_VNCHAR_COMPONENT = CONSTANT.UTF8_VNCHAR_COMPONENT
 local DIACRITIC_MAP = CONSTANT.DIACRITIC_MAP
 local BASE_VOWEL_PRIORITY = CONSTANT.BASE_VOWEL_PRIORITY
 local ENUM_DIACRITIC = CONSTANT.ENUM_DIACRITIC
@@ -21,7 +21,7 @@ M.reverse_list = function(tbl, len)
 		return tbl
 	end
 
-	for i = 1, math.floor(len / 2) do
+	for i = 1, len / 2, 1 do
 		tbl[i], tbl[len - i + 1] = tbl[len - i + 1], tbl[i]
 	end
 	return tbl
@@ -31,7 +31,7 @@ function M.lower(word)
 	local chars = split(word, "\\zs")
 	for i = 1, #chars do
 		local c = chars[i]
-		chars[i] = UTF8_VN_CHAR_DICT[c] and UTF8_VN_CHAR_DICT[c].lo or c:lower()
+		chars[i] = UTF8_VNCHAR_COMPONENT[c] and UTF8_VNCHAR_COMPONENT[c].lo or c:lower()
 	end
 	return tbl_concat(chars)
 end
@@ -40,7 +40,7 @@ function M.upper(word)
 	local chars = split(word, "\\zs")
 	for i = 1, #chars do
 		local c = chars[i]
-		chars[i] = UTF8_VN_CHAR_DICT[c] and UTF8_VN_CHAR_DICT[c].up or c:upper()
+		chars[i] = UTF8_VNCHAR_COMPONENT[c] and UTF8_VNCHAR_COMPONENT[c].up or c:upper()
 	end
 	return tbl_concat(chars)
 end
@@ -65,7 +65,7 @@ end
 function M.is_vietnamese_char(char)
 	if char == nil or char == "" then
 		return false
-	elseif UTF8_VN_CHAR_DICT[char] ~= nil then
+	elseif UTF8_VNCHAR_COMPONENT[char] ~= nil then
 		return true
 	end
 	return char:match("^%a$") ~= nil
@@ -77,14 +77,14 @@ end
 --- @return string The character at the specified level, or the original character if not found
 M.level = function(c, level)
 	assert(c, "c must not be nil")
-	return UTF8_VN_CHAR_DICT[c] and UTF8_VN_CHAR_DICT[c][level] or c
+	return UTF8_VNCHAR_COMPONENT[c] and UTF8_VNCHAR_COMPONENT[c][level] or c
 end
 
 --- Check if a character has a tone
 --- @param c string The character to check
 --- @return boolean True if the character has a tone, false otherwise
 M.has_tone_marked = function(c)
-	return UTF8_VN_CHAR_DICT[c] ~= nil and UTF8_VN_CHAR_DICT[c].tone ~= nil
+	return UTF8_VNCHAR_COMPONENT[c] ~= nil and UTF8_VNCHAR_COMPONENT[c].tone ~= nil
 end
 
 --- Attach a tone to a level 2 Vietnamese character
@@ -173,7 +173,7 @@ end
 --- @return string The character without the tone (lv2 char), or the original character if no tone was found
 --- @return ENUM_DIACRITIC|nil The tone if it was stripped, or nil if no tone was found
 M.strip_tone = function(c)
-	local dict = UTF8_VN_CHAR_DICT[c]
+	local dict = UTF8_VNCHAR_COMPONENT[c]
 	if not dict then
 		return c, nil
 	end
@@ -181,7 +181,7 @@ M.strip_tone = function(c)
 end
 
 M.strip_diacritics = function(c)
-	local dict = UTF8_VN_CHAR_DICT[c]
+	local dict = UTF8_VNCHAR_COMPONENT[c]
 	if not dict then
 		return c, nil, nil
 	end
@@ -258,7 +258,7 @@ end
 --- @return ENUM_DIACRITIC|nil The tone if it exists, or nil if not
 function M.decompose_char(c)
 	assert(c, "c must not be nil")
-	local dict = UTF8_VN_CHAR_DICT[c]
+	local dict = UTF8_VNCHAR_COMPONENT[c]
 	if not dict then
 		return c, c, nil, nil
 	end
@@ -266,7 +266,11 @@ function M.decompose_char(c)
 end
 
 function M.copy_list(list)
-	return { table.unpack(list) }
+	local new_list = {}
+	for i = 1, #list do
+		new_list[i] = list[i]
+	end
+	return new_list
 end
 
 --- Get the byte offset of a column in a row of buffers

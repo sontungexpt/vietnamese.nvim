@@ -1,6 +1,6 @@
 local util = require("vietnamese.util")
 local CONSTANT = require("vietnamese.constant")
-local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VN_CHAR_DICT
+local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VNCHAR_COMPONENT
 local DIACRITIC_MAP = CONSTANT.DIACRITIC_MAP
 
 local M = {}
