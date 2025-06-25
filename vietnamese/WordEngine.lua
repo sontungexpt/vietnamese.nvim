@@ -7,7 +7,10 @@ local CODAS = CONSTANT.CODAS
 local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VNCHAR_COMPONENT
 local BASE_VOWEL_PRIORITY = CONSTANT.BASE_VOWEL_PRIORITY
 
+local SINGLE_VOWEL_LENGTH = 1
+local DIPTHONGS_LENGTH = 2
 local TRIPTHONGS_LENGTH = 3
+
 local MAX_CODA_CLUSTERS_LENGTH = 2
 local MAX_CONSONANT_CLUSTERS_LENGTH = 3
 
@@ -106,7 +109,7 @@ function WordEngine:is_potential_vnword()
 	local word_len = p.word_len
 	if
 		word_len > 1
-		and not util.some_vowels(word, word_len)
+		and not util.is_potiental_vowel_seq(word, word_len, SINGLE_VOWEL_LENGTH, TRIPTHONGS_LENGTH)
 		and not util.is_exceeded_vowel_repetition_time(word, word_len)
 		and not util.unique_tone_marked(word, word_len)
 	then
@@ -301,37 +304,6 @@ function WordEngine:find_main_vowel()
 	-- return find_main_vowel(p.word, p.word_len, vowel_start, vowel_end)
 end
 
---- Find the first and last vowel positions in a character table
---- @param chars table The character table
---- @param chars_size integer The length of the character table
---- @return integer first The index of the first vowel (1-based)
---- @return integer last The index of the last vowel (1-based)
---- @return boolean is_single True if the first and last vowels are the same (single vowel), false otherwise
-local function find_vowel_seq_bounds(chars, chars_size)
-	local first, last = -1, -2
-
-	-- Find the first and last vowel in the character table
-	for i = 1, chars_size do
-		if util.is_vietnamese_vowel(chars[i]) then
-			first = i
-			break
-		end
-	end
-
-	if first == -1 then
-		return first, last, false
-	end
-
-	for i = chars_size, 1, -1 do
-		if util.is_vietnamese_vowel(chars[i]) then
-			last = i
-			break
-		end
-	end
-
-	return first, last, first == last
-end
-
 --- Validate the vowel cluster in the character table
 --- @param chars table The character table
 --- @param chars_size integer The length of the character table
@@ -439,7 +411,7 @@ function WordEngine:analyzie_word_structure(force)
 		return true
 	end
 
-	local vowel_start, vowel_end, _ = find_vowel_seq_bounds(word, len)
+	local vowel_start, vowel_end, _ = util.find_vowel_seq_bounds(word, len)
 	if not are_valid_vowel_indices(vowel_start, vowel_end, len) then
 		p.analyzed_success = false
 		return false
@@ -450,13 +422,15 @@ function WordEngine:analyzie_word_structure(force)
 		return false
 	end
 
-	local valid, onset_end = detect_onset_cluster(word, vowel_start)
+	local valid, onset_end = detect_onset_cluster(word, vowel_start, vowel_end)
 	if not valid then
+		error("Invalid onset cluster detected: " .. tbl_concat(word, "", 1, vowel_start - 1))
 		p.analyzed_success = false
 		return false
 	end
 	vowel_start, vowel_end = fix_onset_vowel_conflict(onset_end, vowel_start, vowel_end)
 	if vowel_start < 1 then
+		error("Invalid vowel start index: " .. tostring(vowel_start))
 		-- The word with no vowel
 		p.analyzed_success = false
 		return false
@@ -500,13 +474,13 @@ function WordEngine:column_boundaries(cursor_col)
 	local raw = p.raw
 	local cursor_char_index = p.cursor_char_index
 
-	local start = cursor_col - #tbl_concat(raw, "", 1, cursor_char_index - 1)
+	local start = cursor_col - vim.fn.strdisplaywidth(tbl_concat(raw, "", 1, cursor_char_index - 1))
 
 	if cursor_char_index > p.raw_len then
 		return start, cursor_col
 	end
 
-	local end_ = cursor_col + #tbl_concat(raw, "", cursor_char_index, p.raw_len)
+	local end_ = cursor_col + vim.fn.strdisplaywidth(tbl_concat(raw, "", cursor_char_index, p.raw_len))
 
 	return start, end_
 end

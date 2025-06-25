@@ -1,7 +1,7 @@
 local M = {}
 
 -- TONE ENUM
-local DIACRITIC_TONE_REMOVAL = 0
+local DIACRITIC_FLAT = 0
 local DIACRITIC_ACUTE = 1
 local DIACRITIC_GRAVE = 2
 local DIACRITIC_HOOK = 3
@@ -15,7 +15,7 @@ local DIACRITIC_HORIZONTAL_STROKE = 9
 M = {
 	--- @enum ENUM_DIACRITIC
 	ENUM_DIACRITIC = {
-		TONE_REMOVAL = DIACRITIC_TONE_REMOVAL,
+		FLAT = DIACRITIC_FLAT,
 		ACUTE = DIACRITIC_ACUTE,
 		GRAVE = DIACRITIC_GRAVE,
 		HOOK = DIACRITIC_HOOK,
@@ -26,16 +26,23 @@ M = {
 		HORN = DIACRITIC_HORN,
 		HORIZONTAL_STROKE = DIACRITIC_HORIZONTAL_STROKE,
 
-		is_tone_removal = function(diacritic)
-			return diacritic == DIACRITIC_TONE_REMOVAL
+		--- Check if the diacritic is flat (no tone)
+		--- @param diacritic ENUM_DIACRITIC
+		--- @return boolean
+		is_flat = function(diacritic)
+			return diacritic == DIACRITIC_FLAT
 		end,
-
+		--- Check if the diacritic is a tone
+		--- @param diacritic ENUM_DIACRITIC
+		--- @return boolean
 		is_tone = function(diacritic)
-			return diacritic == DIACRITIC_ACUTE
-				or diacritic == DIACRITIC_GRAVE
-				or diacritic == DIACRITIC_HOOK
-				or diacritic == DIACRITIC_TILDE
-				or diacritic == DIACRITIC_DOT
+			return diacritic > DIACRITIC_FLAT and diacritic < DIACRITIC_CIRCUMFLEX
+		end,
+		--- Check if the diacritic is a shape
+		--- @param diacritic ENUM_DIACRITIC
+		--- @return boolean
+		is_shape = function(diacritic)
+			return diacritic > DIACRITIC_DOT
 		end,
 	},
 	BASE_VOWEL_PRIORITY = {
@@ -61,64 +68,64 @@ M = {
 	--- UTF8_VN_CHAR_DICT maps a Vietnamese character with tone/diacritic
 	--- to its components: [base, shape, tone], and optionally a tone enum.
 	UTF8_VNCHAR_COMPONENT = {
-		["á"] = { "a", "a", tone = DIACRITIC_ACUTE, up = "Á" },
-		["à"] = { "a", "a", tone = DIACRITIC_GRAVE, up = "À" },
-		["ả"] = { "a", "a", tone = DIACRITIC_HOOK, up = "Ả" },
-		["ã"] = { "a", "a", tone = DIACRITIC_TILDE, up = "Ã" },
-		["ạ"] = { "a", "a", tone = DIACRITIC_DOT, up = "Ạ" },
+		["á"] = { "a", "a", tone = DIACRITIC_ACUTE, up = "Á", lo = "á" },
+		["à"] = { "a", "a", tone = DIACRITIC_GRAVE, up = "À", lo = "à" },
+		["ả"] = { "a", "a", tone = DIACRITIC_HOOK, up = "Ả", lo = "ả" },
+		["ã"] = { "a", "a", tone = DIACRITIC_TILDE, up = "Ã", lo = "ã" },
+		["ạ"] = { "a", "a", tone = DIACRITIC_DOT, up = "Ạ", lo = "ạ" },
 
-		["ă"] = { "a", "ă", shape = DIACRITIC_BREVE, up = "Ă" },
-		["ắ"] = { "a", "ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_ACUTE, up = "Ắ" },
-		["ằ"] = { "a", "ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_GRAVE, up = "Ằ" },
-		["ẳ"] = { "a", "ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_HOOK, up = "Ẳ" },
-		["ẵ"] = { "a", "ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_TILDE, up = "Ẵ" },
-		["ặ"] = { "a", "ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_DOT, up = "Ặ" },
+		["ă"] = { "a", "ă", shape = DIACRITIC_BREVE, up = "Ă", lo = "ă" },
+		["ắ"] = { "a", "ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_ACUTE, up = "Ắ", lo = "ắ" },
+		["ằ"] = { "a", "ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_GRAVE, up = "Ằ", lo = "ằ" },
+		["ẳ"] = { "a", "ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_HOOK, up = "Ẳ", lo = "ẳ" },
+		["ẵ"] = { "a", "ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_TILDE, up = "Ẵ", lo = "ẵ" },
+		["ặ"] = { "a", "ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_DOT, up = "Ặ", lo = "ặ" },
 
-		["â"] = { "a", "â", shape = DIACRITIC_CIRCUMFLEX, up = "Â" },
-		["ấ"] = { "a", "â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_ACUTE, up = "Ấ" },
-		["ầ"] = { "a", "â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_GRAVE, up = "Ầ" },
-		["ẩ"] = { "a", "â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_HOOK, up = "Ẩ" },
-		["ẫ"] = { "a", "â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_TILDE, up = "Ẫ" },
-		["ậ"] = { "a", "â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_DOT, up = "Ậ" },
+		["â"] = { "a", "â", shape = DIACRITIC_CIRCUMFLEX, up = "Â", lo = "â" },
+		["ấ"] = { "a", "â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_ACUTE, up = "Ấ", lo = "ấ" },
+		["ầ"] = { "a", "â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_GRAVE, up = "Ầ", lo = "ầ" },
+		["ẩ"] = { "a", "â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_HOOK, up = "Ẩ", lo = "ẩ" },
+		["ẫ"] = { "a", "â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_TILDE, up = "Ẫ", lo = "ẫ" },
+		["ậ"] = { "a", "â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_DOT, up = "Ậ", lo = "ậ" },
 
-		["é"] = { "e", "e", tone = DIACRITIC_ACUTE, up = "É" },
-		["è"] = { "e", "e", tone = DIACRITIC_GRAVE, up = "È" },
-		["ẻ"] = { "e", "e", tone = DIACRITIC_HOOK, up = "Ẻ" },
-		["ẽ"] = { "e", "e", tone = DIACRITIC_TILDE, up = "Ẽ" },
-		["ẹ"] = { "e", "e", tone = DIACRITIC_DOT, up = "Ẹ" },
+		["é"] = { "e", "e", tone = DIACRITIC_ACUTE, up = "É", lo = "é" },
+		["è"] = { "e", "e", tone = DIACRITIC_GRAVE, up = "È", lo = "è" },
+		["ẻ"] = { "e", "e", tone = DIACRITIC_HOOK, up = "Ẻ", lo = "ẻ" },
+		["ẽ"] = { "e", "e", tone = DIACRITIC_TILDE, up = "Ẽ", lo = "ẽ" },
+		["ẹ"] = { "e", "e", tone = DIACRITIC_DOT, up = "Ẹ", lo = "ẹ" },
 
-		["ê"] = { "e", "ê", shape = DIACRITIC_CIRCUMFLEX, up = "Ê" },
-		["ế"] = { "e", "ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_ACUTE, up = "Ế" },
-		["ề"] = { "e", "ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_GRAVE, up = "Ề" },
-		["ể"] = { "e", "ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_HOOK, up = "Ể" },
-		["ễ"] = { "e", "ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_TILDE, up = "Ễ" },
-		["ệ"] = { "e", "ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_DOT, up = "Ệ" },
+		["ê"] = { "e", "ê", shape = DIACRITIC_CIRCUMFLEX, up = "Ê", lo = "ê" },
+		["ế"] = { "e", "ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_ACUTE, up = "Ế", lo = "ế" },
+		["ề"] = { "e", "ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_GRAVE, up = "Ề", lo = "ề" },
+		["ể"] = { "e", "ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_HOOK, up = "Ể", lo = "ể" },
+		["ễ"] = { "e", "ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_TILDE, up = "Ễ", lo = "ễ" },
+		["ệ"] = { "e", "ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_DOT, up = "Ệ", lo = "ệ" },
 
-		["í"] = { "i", "i", tone = DIACRITIC_ACUTE, up = "Í" },
-		["ì"] = { "i", "i", tone = DIACRITIC_GRAVE, up = "Ì" },
-		["ỉ"] = { "i", "i", tone = DIACRITIC_HOOK, up = "Ỉ" },
-		["ĩ"] = { "i", "i", tone = DIACRITIC_TILDE, up = "Ĩ" },
-		["ị"] = { "i", "i", tone = DIACRITIC_DOT, up = "Ị" },
+		["í"] = { "i", "i", tone = DIACRITIC_ACUTE, up = "Í", lo = "í" },
+		["ì"] = { "i", "i", tone = DIACRITIC_GRAVE, up = "Ì", lo = "ì" },
+		["ỉ"] = { "i", "i", tone = DIACRITIC_HOOK, up = "Ỉ", lo = "ỉ" },
+		["ĩ"] = { "i", "i", tone = DIACRITIC_TILDE, up = "Ĩ", lo = "ĩ" },
+		["ị"] = { "i", "i", tone = DIACRITIC_DOT, up = "Ị", lo = "ị" },
 
-		["ó"] = { "o", "o", tone = DIACRITIC_ACUTE, up = "Ó" },
-		["ò"] = { "o", "o", tone = DIACRITIC_GRAVE, up = "Ò" },
-		["ỏ"] = { "o", "o", tone = DIACRITIC_HOOK, up = "Ỏ" },
-		["õ"] = { "o", "o", tone = DIACRITIC_TILDE, up = "Õ" },
-		["ọ"] = { "o", "o", tone = DIACRITIC_DOT, up = "Ọ" },
+		["ó"] = { "o", "o", tone = DIACRITIC_ACUTE, up = "Ó", lo = "ó" },
+		["ò"] = { "o", "o", tone = DIACRITIC_GRAVE, up = "Ò", lo = "ò" },
+		["ỏ"] = { "o", "o", tone = DIACRITIC_HOOK, up = "Ỏ", lo = "ỏ" },
+		["õ"] = { "o", "o", tone = DIACRITIC_TILDE, up = "Õ", lo = "õ" },
+		["ọ"] = { "o", "o", tone = DIACRITIC_DOT, up = "Ọ", lo = "ọ" },
 
-		["ô"] = { "o", "ô", shape = DIACRITIC_CIRCUMFLEX, up = "Ô" },
-		["ố"] = { "o", "ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_ACUTE, up = "Ố" },
-		["ồ"] = { "o", "ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_GRAVE, up = "Ồ" },
-		["ổ"] = { "o", "ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_HOOK, up = "Ổ" },
-		["ỗ"] = { "o", "ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_TILDE, up = "Ỗ" },
-		["ộ"] = { "o", "ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_DOT, up = "Ộ" },
+		["ô"] = { "o", "ô", shape = DIACRITIC_CIRCUMFLEX, up = "Ô", lo = "ô" },
+		["ố"] = { "o", "ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_ACUTE, up = "Ố", lo = "ố" },
+		["ồ"] = { "o", "ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_GRAVE, up = "Ồ", lo = "ồ" },
+		["ổ"] = { "o", "ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_HOOK, up = "Ổ", lo = "ổ" },
+		["ỗ"] = { "o", "ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_TILDE, up = "Ỗ", lo = "ỗ" },
+		["ộ"] = { "o", "ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_DOT, up = "Ộ", lo = "ộ" },
 
-		["ơ"] = { "o", "ơ", shape = DIACRITIC_HORN, up = "Ơ" },
-		["ớ"] = { "o", "ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_ACUTE, up = "Ớ" },
-		["ờ"] = { "o", "ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_GRAVE, up = "Ờ" },
-		["ở"] = { "o", "ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_HOOK, up = "Ở" },
-		["ỡ"] = { "o", "ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_TILDE, up = "Ỡ" },
-		["ợ"] = { "o", "ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_DOT, up = "Ợ" },
+		["ơ"] = { "o", "ơ", shape = DIACRITIC_HORN, up = "Ơ", lo = "ơ" },
+		["ớ"] = { "o", "ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_ACUTE, up = "Ớ", lo = "ớ" },
+		["ờ"] = { "o", "ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_GRAVE, up = "Ờ", lo = "ờ" },
+		["ở"] = { "o", "ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_HOOK, up = "Ở", lo = "ở" },
+		["ỡ"] = { "o", "ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_TILDE, up = "Ỡ", lo = "ỡ" },
+		["ợ"] = { "o", "ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_DOT, up = "Ợ", lo = "ợ" },
 
 		["ú"] = { "u", "u", tone = DIACRITIC_ACUTE, up = "Ú" },
 		["ù"] = { "u", "u", tone = DIACRITIC_GRAVE, up = "Ù" },
@@ -126,100 +133,101 @@ M = {
 		["ũ"] = { "u", "u", tone = DIACRITIC_TILDE, up = "Ũ" },
 		["ụ"] = { "u", "u", tone = DIACRITIC_DOT, up = "Ụ" },
 
-		["ư"] = { "u", "ư", shape = DIACRITIC_HORN, up = "Ư" },
-		["ứ"] = { "u", "ư", shape = DIACRITIC_HORN, tone = DIACRITIC_ACUTE, up = "Ứ" },
-		["ừ"] = { "u", "ư", shape = DIACRITIC_HORN, tone = DIACRITIC_GRAVE, up = "Ừ" },
-		["ử"] = { "u", "ư", shape = DIACRITIC_HORN, tone = DIACRITIC_HOOK, up = "Ử" },
-		["ữ"] = { "u", "ư", shape = DIACRITIC_HORN, tone = DIACRITIC_TILDE, up = "Ữ" },
-		["ự"] = { "u", "ư", shape = DIACRITIC_HORN, tone = DIACRITIC_DOT, up = "Ự" },
+		["ư"] = { "u", "ư", shape = DIACRITIC_HORN, up = "Ư", lo = "ư" },
+		["ứ"] = { "u", "ư", shape = DIACRITIC_HORN, tone = DIACRITIC_ACUTE, up = "Ứ", lo = "ứ" },
+		["ừ"] = { "u", "ư", shape = DIACRITIC_HORN, tone = DIACRITIC_GRAVE, up = "Ừ", lo = "ừ" },
+		["ử"] = { "u", "ư", shape = DIACRITIC_HORN, tone = DIACRITIC_HOOK, up = "Ử", lo = "ử" },
+		["ữ"] = { "u", "ư", shape = DIACRITIC_HORN, tone = DIACRITIC_TILDE, up = "Ữ", lo = "ữ" },
+		["ự"] = { "u", "ư", shape = DIACRITIC_HORN, tone = DIACRITIC_DOT, up = "Ự", lo = "ự" },
 
-		["ý"] = { "y", "y", tone = DIACRITIC_ACUTE, up = "Ý" },
-		["ỳ"] = { "y", "y", tone = DIACRITIC_GRAVE, up = "Ỳ" },
-		["ỷ"] = { "y", "y", tone = DIACRITIC_HOOK, up = "Ỷ" },
-		["ỹ"] = { "y", "y", tone = DIACRITIC_TILDE, up = "Ỹ" },
-		["ỵ"] = { "y", "y", tone = DIACRITIC_DOT, up = "Ỵ" },
+		["ý"] = { "y", "y", tone = DIACRITIC_ACUTE, up = "Ý", lo = "ý" },
+		["ỳ"] = { "y", "y", tone = DIACRITIC_GRAVE, up = "Ỳ", lo = "ỳ" },
+		["ỷ"] = { "y", "y", tone = DIACRITIC_HOOK, up = "Ỷ", lo = "ỷ" },
+		["ỹ"] = { "y", "y", tone = DIACRITIC_TILDE, up = "Ỹ", lo = "ỹ" },
+		["ỵ"] = { "y", "y", tone = DIACRITIC_DOT, up = "Ỵ", lo = "ỵ" },
 
-		["đ"] = { "d", "d", shape = DIACRITIC_HORIZONTAL_STROKE, up = "Đ" },
+		["đ"] = { "d", "d", shape = DIACRITIC_HORIZONTAL_STROKE, up = "Đ", lo = "đ" },
 
 		-- uppercase
-		["Á"] = { "A", "A", tone = DIACRITIC_ACUTE, lo = "á" },
-		["À"] = { "A", "A", tone = DIACRITIC_GRAVE, lo = "à" },
-		["Ả"] = { "A", "A", tone = DIACRITIC_HOOK, lo = "ả" },
-		["Ã"] = { "A", "A", tone = DIACRITIC_TILDE, lo = "ã" },
-		["Ạ"] = { "A", "A", tone = DIACRITIC_DOT, lo = "ạ" },
+		["Á"] = { "A", "A", tone = DIACRITIC_ACUTE, lo = "á", up = "Á" },
+		["À"] = { "A", "A", tone = DIACRITIC_GRAVE, lo = "à", up = "À" },
+		["Ả"] = { "A", "A", tone = DIACRITIC_HOOK, lo = "ả", up = "Ả" },
+		["Ã"] = { "A", "A", tone = DIACRITIC_TILDE, lo = "ã", up = "Ã" },
+		["Ạ"] = { "A", "A", tone = DIACRITIC_DOT, lo = "ạ", up = "Ạ" },
 
-		["Ă"] = { "A", "Ă", shape = DIACRITIC_BREVE, lo = "ă" },
-		["Ắ"] = { "A", "Ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_ACUTE, lo = "ắ" },
-		["Ằ"] = { "A", "Ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_GRAVE, lo = "ằ" },
-		["Ẳ"] = { "A", "Ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_HOOK, lo = "ẳ" },
-		["Ẵ"] = { "A", "Ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_TILDE, lo = "ẵ" },
-		["Ặ"] = { "A", "Ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_DOT, lo = "ặ" },
+		["Ă"] = { "A", "Ă", shape = DIACRITIC_BREVE, lo = "ă", up = "Ă" },
+		["Ắ"] = { "A", "Ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_ACUTE, lo = "ắ", up = "Ắ" },
+		["Ằ"] = { "A", "Ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_GRAVE, lo = "ằ", up = "Ằ" },
+		["Ẳ"] = { "A", "Ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_HOOK, lo = "ẳ", up = "Ẳ" },
+		["Ẵ"] = { "A", "Ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_TILDE, lo = "ẵ", up = "Ẵ" },
+		["Ặ"] = { "A", "Ă", shape = DIACRITIC_BREVE, tone = DIACRITIC_DOT, lo = "ặ", up = "Ặ" },
 
-		["Â"] = { "A", "Â", shape = DIACRITIC_CIRCUMFLEX, lo = "â" },
-		["Ấ"] = { "A", "Â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_ACUTE, lo = "ấ" },
-		["Ầ"] = { "A", "Â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_GRAVE, lo = "ầ" },
-		["Ẩ"] = { "A", "Â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_HOOK, lo = "ẩ" },
-		["Ẫ"] = { "A", "Â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_TILDE, lo = "ẫ" },
+		["Â"] = { "A", "Â", shape = DIACRITIC_CIRCUMFLEX, lo = "â", up = "Â" },
+		["Ấ"] = { "A", "Â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_ACUTE, lo = "ấ", up = "Ấ" },
+		["Ầ"] = { "A", "Â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_GRAVE, lo = "ầ", up = "Ầ" },
+		["Ẩ"] = { "A", "Â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_HOOK, lo = "ẩ", up = "Ẩ" },
+		["Ẫ"] = { "A", "Â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_TILDE, lo = "ẫ", up = "Ẫ" },
+		["Ậ"] = { "A", "Â", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_DOT, lo = "ậ", up = "Ậ" },
 
-		["É"] = { "E", "E", tone = DIACRITIC_ACUTE, lo = "é" },
-		["È"] = { "E", "E", tone = DIACRITIC_GRAVE, lo = "è" },
-		["Ẻ"] = { "E", "E", tone = DIACRITIC_HOOK, lo = "ẻ" },
-		["Ẽ"] = { "E", "E", tone = DIACRITIC_TILDE, lo = "ẽ" },
-		["Ẹ"] = { "E", "E", tone = DIACRITIC_DOT, lo = "ẹ" },
+		["É"] = { "E", "E", tone = DIACRITIC_ACUTE, lo = "é", up = "É" },
+		["È"] = { "E", "E", tone = DIACRITIC_GRAVE, lo = "è", up = "È" },
+		["Ẻ"] = { "E", "E", tone = DIACRITIC_HOOK, lo = "ẻ", up = "Ẻ" },
+		["Ẽ"] = { "E", "E", tone = DIACRITIC_TILDE, lo = "ẽ", up = "Ẽ" },
+		["Ẹ"] = { "E", "E", tone = DIACRITIC_DOT, lo = "ẹ", up = "Ẹ" },
 
-		["Ê"] = { "E", "Ê", shape = DIACRITIC_CIRCUMFLEX, lo = "ê" },
-		["Ế"] = { "E", "Ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_ACUTE, lo = "ế" },
-		["Ề"] = { "E", "Ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_GRAVE, lo = "ề" },
-		["Ể"] = { "E", "Ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_HOOK, lo = "ể" },
-		["Ễ"] = { "E", "Ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_TILDE, lo = "ễ" },
-		["Ệ"] = { "E", "Ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_DOT, lo = "ệ" },
+		["Ê"] = { "E", "Ê", shape = DIACRITIC_CIRCUMFLEX, lo = "ê", up = "Ê" },
+		["Ế"] = { "E", "Ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_ACUTE, lo = "ế", up = "Ế" },
+		["Ề"] = { "E", "Ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_GRAVE, lo = "ề", up = "Ề" },
+		["Ể"] = { "E", "Ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_HOOK, lo = "ể", up = "Ể" },
+		["Ễ"] = { "E", "Ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_TILDE, lo = "ễ", up = "Ễ" },
+		["Ệ"] = { "E", "Ê", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_DOT, lo = "ệ", up = "Ệ" },
 
-		["Í"] = { "I", "I", tone = DIACRITIC_ACUTE, lo = "í" },
-		["Ì"] = { "I", "I", tone = DIACRITIC_GRAVE, lo = "ì" },
-		["Ỉ"] = { "I", "I", tone = DIACRITIC_HOOK, lo = "ỉ" },
-		["Ĩ"] = { "I", "I", tone = DIACRITIC_TILDE, lo = "ĩ" },
-		["Ị"] = { "I", "I", tone = DIACRITIC_DOT, lo = "ị" },
+		["Í"] = { "I", "I", tone = DIACRITIC_ACUTE, lo = "í", up = "Í" },
+		["Ì"] = { "I", "I", tone = DIACRITIC_GRAVE, lo = "ì", up = "Ì" },
+		["Ỉ"] = { "I", "I", tone = DIACRITIC_HOOK, lo = "ỉ", up = "Ỉ" },
+		["Ĩ"] = { "I", "I", tone = DIACRITIC_TILDE, lo = "ĩ", up = "Ĩ" },
+		["Ị"] = { "I", "I", tone = DIACRITIC_DOT, lo = "ị", up = "Ị" },
 
-		["Ó"] = { "O", "O", tone = DIACRITIC_ACUTE, lo = "ó" },
-		["Ò"] = { "O", "O", tone = DIACRITIC_GRAVE, lo = "ò" },
-		["Ỏ"] = { "O", "O", tone = DIACRITIC_HOOK, lo = "ỏ" },
-		["Õ"] = { "O", "O", tone = DIACRITIC_TILDE, lo = "õ" },
-		["Ọ"] = { "O", "O", tone = DIACRITIC_DOT, lo = "ọ" },
+		["Ó"] = { "O", "O", tone = DIACRITIC_ACUTE, lo = "ó", up = "Ó" },
+		["Ò"] = { "O", "O", tone = DIACRITIC_GRAVE, lo = "ò", up = "Ò" },
+		["Ỏ"] = { "O", "O", tone = DIACRITIC_HOOK, lo = "ỏ", up = "Ỏ" },
+		["Õ"] = { "O", "O", tone = DIACRITIC_TILDE, lo = "õ", up = "Õ" },
+		["Ọ"] = { "O", "O", tone = DIACRITIC_DOT, lo = "ọ", up = "Ọ" },
 
-		["Ô"] = { "O", "Ô", shape = DIACRITIC_CIRCUMFLEX, lo = "ô" },
-		["Ố"] = { "O", "Ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_ACUTE, lo = "ố" },
-		["Ồ"] = { "O", "Ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_GRAVE, lo = "ồ" },
-		["Ổ"] = { "O", "Ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_HOOK, lo = "ổ" },
-		["Ỗ"] = { "O", "Ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_TILDE, lo = "ỗ" },
-		["Ộ"] = { "O", "Ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_DOT, lo = "ộ" },
+		["Ô"] = { "O", "Ô", shape = DIACRITIC_CIRCUMFLEX, lo = "ô", up = "Ô" },
+		["Ố"] = { "O", "Ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_ACUTE, lo = "ố", up = "Ố" },
+		["Ồ"] = { "O", "Ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_GRAVE, lo = "ồ", up = "Ồ" },
+		["Ổ"] = { "O", "Ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_HOOK, lo = "ổ", up = "Ổ" },
+		["Ỗ"] = { "O", "Ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_TILDE, lo = "ỗ", up = "Ỗ" },
+		["Ộ"] = { "O", "Ô", shape = DIACRITIC_CIRCUMFLEX, tone = DIACRITIC_DOT, lo = "ộ", up = "Ộ" },
 
-		["Ơ"] = { "O", "Ơ", shape = DIACRITIC_HORN, lo = "ơ" },
-		["Ớ"] = { "O", "Ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_ACUTE, lo = "ớ" },
-		["Ờ"] = { "O", "Ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_GRAVE, lo = "ờ" },
-		["Ở"] = { "O", "Ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_HOOK, lo = "ở" },
-		["Ỡ"] = { "O", "Ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_TILDE, lo = "ỡ" },
-		["Ợ"] = { "O", "Ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_DOT, lo = "ợ" },
+		["Ơ"] = { "O", "Ơ", shape = DIACRITIC_HORN, lo = "ơ", up = "Ơ" },
+		["Ớ"] = { "O", "Ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_ACUTE, lo = "ớ", up = "Ớ" },
+		["Ờ"] = { "O", "Ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_GRAVE, lo = "ờ", up = "Ờ" },
+		["Ở"] = { "O", "Ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_HOOK, lo = "ở", up = "Ở" },
+		["Ỡ"] = { "O", "Ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_TILDE, lo = "ỡ", up = "Ỡ" },
+		["Ợ"] = { "O", "Ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_DOT, lo = "ợ", up = "Ợ" },
 
-		["Ú"] = { "U", "U", tone = DIACRITIC_ACUTE, lo = "ú" },
-		["Ù"] = { "U", "U", tone = DIACRITIC_GRAVE, lo = "ù" },
-		["Ủ"] = { "U", "U", tone = DIACRITIC_HOOK, lo = "ủ" },
-		["Ũ"] = { "U", "U", tone = DIACRITIC_TILDE, lo = "ũ" },
-		["Ụ"] = { "U", "U", tone = DIACRITIC_DOT, lo = "ụ" },
+		["Ú"] = { "U", "U", tone = DIACRITIC_ACUTE, lo = "ú", up = "Ú" },
+		["Ù"] = { "U", "U", tone = DIACRITIC_GRAVE, lo = "ù", up = "Ù" },
+		["Ủ"] = { "U", "U", tone = DIACRITIC_HOOK, lo = "ủ", up = "Ủ" },
+		["Ũ"] = { "U", "U", tone = DIACRITIC_TILDE, lo = "ũ", up = "Ũ" },
+		["Ụ"] = { "U", "U", tone = DIACRITIC_DOT, lo = "ụ", up = "Ụ" },
 
-		["Ư"] = { "U", "Ư", shape = DIACRITIC_HORN, lo = "ư" },
-		["Ứ"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_ACUTE, lo = "ứ" },
-		["Ừ"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_GRAVE, lo = "ừ" },
-		["Ử"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_HOOK, lo = "ử" },
-		["Ữ"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_TILDE, lo = "ữ" },
-		["Ự"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_DOT, lo = "ự" },
+		["Ư"] = { "U", "Ư", shape = DIACRITIC_HORN, lo = "ư", up = "Ư" },
+		["Ứ"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_ACUTE, lo = "ứ", up = "Ứ" },
+		["Ừ"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_GRAVE, lo = "ừ", up = "Ừ" },
+		["Ử"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_HOOK, lo = "ử", up = "Ử" },
+		["Ữ"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_TILDE, lo = "ữ", up = "Ữ" },
+		["Ự"] = { "U", "Ư", shape = DIACRITIC_HORN, tone = DIACRITIC_DOT, lo = "ự", up = "Ự" },
 
-		["Ý"] = { "Y", "Y", tone = DIACRITIC_ACUTE, lo = "ý" },
-		["Ỳ"] = { "Y", "Y", tone = DIACRITIC_GRAVE, lo = "ỳ" },
-		["Ỷ"] = { "Y", "Y", tone = DIACRITIC_HOOK, lo = "ỷ" },
-		["Ỹ"] = { "Y", "Y", tone = DIACRITIC_TILDE, lo = "ỹ" },
-		["Ỵ"] = { "Y", "Y", tone = DIACRITIC_DOT, lo = "ỵ" },
+		["Ý"] = { "Y", "Y", tone = DIACRITIC_ACUTE, lo = "ý", up = "Ý" },
+		["Ỳ"] = { "Y", "Y", tone = DIACRITIC_GRAVE, lo = "ỳ", up = "Ỳ" },
+		["Ỷ"] = { "Y", "Y", tone = DIACRITIC_HOOK, lo = "ỷ", up = "Ỷ" },
+		["Ỹ"] = { "Y", "Y", tone = DIACRITIC_TILDE, lo = "ỹ", up = "Ỹ" },
+		["Ỵ"] = { "Y", "Y", tone = DIACRITIC_DOT, lo = "ỵ", up = "Ỵ" },
 
-		["Đ"] = { "D", "D", shape = DIACRITIC_HORIZONTAL_STROKE, lo = "đ" },
+		["Đ"] = { "D", "D", shape = DIACRITIC_HORIZONTAL_STROKE, up = "Đ", lo = "đ" },
 	},
 
 	DIACRITIC_MAP = {
@@ -332,6 +340,7 @@ M = {
 		["b"] = true,
 		["c"] = true,
 		["ch"] = true,
+		["z"] = true, -- teen language replace d or gi
 		["d"] = true,
 		["đ"] = true,
 		["g"] = true,
@@ -347,6 +356,7 @@ M = {
 		["ngh"] = true,
 		["nh"] = true,
 		["p"] = true,
+		["f"] = true, -- teen language replace ph
 		["ph"] = true,
 		["qu"] = true,
 		["r"] = true,

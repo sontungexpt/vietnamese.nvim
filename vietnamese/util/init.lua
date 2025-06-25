@@ -1,7 +1,8 @@
+local vim = vim
 local fn, api = vim.fn, vim.api
-local split = fn.split
 local nvim_buf_get_text = api.nvim_buf_get_text
 local tbl_concat = table.concat
+local str_utf_pos = vim.str_utf_pos
 
 local CONSTANT = require("vietnamese.constant")
 local UTF8_VNCHAR_COMPONENT = CONSTANT.UTF8_VNCHAR_COMPONENT
@@ -27,20 +28,100 @@ M.reverse_list = function(tbl, len)
 	return tbl
 end
 
-function M.lower(word)
-	local chars = split(word, "\\zs")
-	for i = 1, #chars do
-		local c = chars[i]
-		chars[i] = UTF8_VNCHAR_COMPONENT[c] and UTF8_VNCHAR_COMPONENT[c].lo or c:lower()
+--- Convert a string to a table of characters
+--- @param str string: The string to Convert
+--- @return table: A table containing the characters of the starting
+--- @return number: The length of the character table
+function M.str2chars(str)
+	local chars = {}
+	local pos = str_utf_pos(str)
+	local len = #pos
+	for i = 1, len do
+		local start_i, start_in = pos[i], pos[i + 1]
+		chars[i] = str:sub(start_i, start_in ~= nil and start_in - 1 or nil)
 	end
+	return chars, len
+end
+
+--- Get the UTF-8 positions of characters in a string
+--- @param str string: The string to get positions from
+--- @return fun(): (number|nil, string|nil) An iterator function that returns the start position of each character
+--- and the character itself
+--- This function is used to iterate over the characters in a string
+function M.iter_chars(str)
+	local pos = str_utf_pos(str)
+	local i = 0
+	return function()
+		i = i + 1
+		local start_idx = pos[i]
+		if not start_idx then
+			return nil, nil
+		end
+		local start_next = pos[i + 1]
+		return i, str:sub(start_idx, start_next ~= nil and start_next - 1 or nil)
+	end
+end
+
+--- Iterate over characters in a string in reverse ordered
+--- @param str string: The string to iterate over
+--- @return fun(): (number|nil, string|nil, number|nil) An iterator function that returns the index, character, and position
+--- index: The index start from 1 of the character in the string
+--- string: The character at the current index
+--- real_index: The real index of the character in the string
+function M.iter_chars_reverse(str)
+	local pos = str_utf_pos(str)
+	local len = #pos
+	local i = len + 1
+	return function()
+		i = i - 1
+		local start_idx = pos[i]
+		if not start_idx then
+			return nil, nil, nil
+		end
+		local start_next = pos[i + 1]
+		return len - i + 1, str:sub(start_idx, start_next ~= nil and start_next - 1 or nil), i
+	end
+end
+
+--- Convert a string to lowercase
+--- @param word string The string to Convert
+--- @return string The lowercase version of the starting
+function M.lower(word)
+	local chars = {}
+	for i, char in M.iter_chars(word) do
+		local comp = UTF8_VNCHAR_COMPONENT[char]
+		chars[i] = comp and comp.lo or char:lower()
+	end
+
 	return tbl_concat(chars)
 end
 
+function M.is_upper(c)
+	assert(c, "c must not be nil")
+	local comp = UTF8_VNCHAR_COMPONENT[c]
+	if not comp then
+		return c:match("^[A-Z]$") ~= nil
+	end
+	return comp.up ~= nil
+end
+
+function M.is_lower(c)
+	assert(c, "c must not be nil")
+	local comp = UTF8_VNCHAR_COMPONENT[c]
+	if not comp then
+		return c:match("^[a-z]$") ~= nil
+	end
+	return comp.lo ~= nil
+end
+
+--- Convert a string to uppercase
+--- @param word string The string to Convert
+--- @return string The uppercase version of the starting
 function M.upper(word)
-	local chars = split(word, "\\zs")
-	for i = 1, #chars do
-		local c = chars[i]
-		chars[i] = UTF8_VNCHAR_COMPONENT[c] and UTF8_VNCHAR_COMPONENT[c].up or c:upper()
+	local chars = {}
+	for i, char in M.iter_chars(word) do
+		local comp = UTF8_VNCHAR_COMPONENT[char]
+		chars[i] = comp and comp.up or char:upper()
 	end
 	return tbl_concat(chars)
 end
@@ -107,14 +188,14 @@ end
 
 --- Merge a diacritic into a character
 --- @param c string The character to merge the diacritic into
---- @param diacritic string The diacritic to merge
+--- @param diacritic ENUM_DIACRITIC The diacritic to merge
 --- @param force boolean|nil If true, forces the merge even if the diacritic is not applicable
 --- @return string The character with the merged diacritic, or the original character if no merge was possible
 --- @return ENUM_DIACRITIC|nil The original diacritic if it was replaced, or nil if no replace was possible
 M.merge_diacritic = function(c, diacritic, force)
 	assert(c ~= nil, "c must not be nil")
 	assert(diacritic ~= nil, "diacritic must not be nil")
-	if ENUM_DIACRITIC.is_tone_removal(diacritic) then
+	if ENUM_DIACRITIC.is_flat(diacritic) then
 		return M.strip_tone(c)
 	end
 	local is_tone = ENUM_DIACRITIC.is_tone(diacritic)
@@ -186,6 +267,57 @@ M.strip_diacritics = function(c)
 		return c, nil, nil
 	end
 	return dict[1], dict.shape, dict.tone
+end
+
+--- Find the first and last vowel positions in a character table
+--- @param chars table The character table
+--- @param chars_size integer The length of the character table
+--- @return integer first The index of the first vowel (1-based)
+--- @return integer last The index of the last vowel (1-based)
+--- @return boolean is_single True if the first and last vowels are the same (single vowel), false otherwise
+function M.find_vowel_seq_bounds(chars, chars_size)
+	local first, last = -1, -2
+
+	-- Find the first and last vowel in the character table
+	for i = 1, chars_size do
+		if M.is_vietnamese_vowel(chars[i]) then
+			first = i
+			break
+		end
+	end
+
+	if first == -1 then
+		return first, last, false
+	end
+
+	for i = chars_size, 1, -1 do
+		if M.is_vietnamese_vowel(chars[i]) then
+			last = i
+			break
+		end
+	end
+
+	return first, last, first == last
+end
+
+--- Check if a sequence of characters is a potential vowel sequence
+--- @param chars table The character Table
+--- @param chars_size integer The size of the character Table
+--- @param min_seq_len integer The minimum length of the vowel sequence
+--- @param max_seq_len integer The maximum length of the vowel sequence @param strict boolean If true, checks for strict Vietnamese vowels (no accept tone char like "á", "à", etc.)
+--- @param strict boolean|nil If true, checks for strict Vietnamese vowels (no accept tone char like "á", "à", etc.)
+--- @return boolean True if the sequence is a potential vowel sequence, false otherwise
+function M.is_potiental_vowel_seq(chars, chars_size, min_seq_len, max_seq_len, strict)
+	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
+	local start, stop = M.find_vowel_seq_bounds(chars, chars_size)
+
+	local len = stop - start + 1
+	if len < min_seq_len or len > max_seq_len then
+		return false
+	elseif stop - 1 > start then
+		return M.all_vowels(chars, chars_size, strict, start + 1, stop - 1)
+	end
+	return true
 end
 
 --- Check if at least one character in the list is a Vietnamese vowel

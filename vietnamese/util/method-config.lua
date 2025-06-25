@@ -1,6 +1,6 @@
 local util = require("vietnamese.util")
+
 local CONSTANT = require("vietnamese.constant")
-local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VNCHAR_COMPONENT
 local DIACRITIC_MAP = CONSTANT.DIACRITIC_MAP
 
 local M = {}
@@ -75,7 +75,7 @@ function M.get_diacritic(key, base_char, method_config, strict)
 	if diacritic then
 		return diacritic
 	elseif M.is_tone_removal_key(key, method_config) and util.has_tone_marked(base_char) then
-		return CONSTANT.ENUM_DIACRITIC.TONE_REMOVAL
+		return CONSTANT.ENUM_DIACRITIC.FLAT
 	end
 	return nil
 end

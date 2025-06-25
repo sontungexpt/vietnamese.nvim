@@ -1,6 +1,5 @@
 local vim = vim
-local fn, api = vim.fn, vim.api
-local split = fn.split
+local api = vim.api
 local nvim_win_get_cursor, nvim_win_set_cursor, nvim_buf_set_text, nvim_buf_get_text =
 	api.nvim_win_get_cursor, api.nvim_win_set_cursor, api.nvim_buf_set_text, api.nvim_buf_get_text
 
@@ -9,9 +8,17 @@ local util = require("vietnamese.util")
 local config = require("vietnamese.config")
 local is_vietnamese_char = util.is_vietnamese_char
 local reverse_tbl = util.reverse_list
+local iter_chars = util.iter_chars
+local iter_chars_reverse = util.iter_chars_reverse
 
-local THRESHOLD_WORD_LEN = 10
 local METHOD_CONFIG_PATH = "vietnamese.method."
+
+-- assuming the worst case word length is 18 characters
+-- each Vietnamese character can take 2 cells
+-- The max valid Vietnamese word length is 8 characters but we add 2 cells to assure that the word
+-- will be get accurate
+local THRESHOLD_WORD_LEN = 8
+local WORST_CASE_WORD_LEN = THRESHOLD_WORD_LEN * 2 + 2
 
 local SUPPORTED_METHODS = {
 	telex = true,
@@ -77,55 +84,37 @@ end
 --- @return table: Reversed list of left characters (from closest to furthest from cursor)
 --- @return number: Length of left_chars collected
 local function collect_left_chars(bufnr, row_0based, col_0based, inserting)
+	-- Get the text from start_col to end_col
+	local text_chunk = nvim_buf_get_text(
+		bufnr,
+		row_0based,
+		math.max(0, col_0based - WORST_CASE_WORD_LEN),
+		row_0based,
+		col_0based,
+		{}
+	)[1]
+	if not text_chunk or text_chunk == "" then
+		return {}, 0
+	end
+
 	local collected_chars = {} -- Table to store characters we collect
 	local count = 0 -- Length of the left_chars_reversed table
-	local batch = 0 -- Number of times we expanded further left
 
-	repeat
-		-- Calculate new start and end for reading more characters on the left
-		local start_col = math.max(0, col_0based - THRESHOLD_WORD_LEN * (batch + 1))
-		local end_col = col_0based - THRESHOLD_WORD_LEN * batch
-
-		-- Get the text from start_col to end_col
-		local text_chunk = nvim_buf_get_text(bufnr, row_0based, start_col, row_0based, end_col, {})[1]
-		if not text_chunk or text_chunk == "" then
-			return reverse_tbl(collected_chars, count), count
+	for i, ch in iter_chars_reverse(text_chunk) do
+		if inserting and i == 1 then
+			collected_chars[1] = ch
+			count = 1
+		elseif is_vietnamese_char(ch) then
+			count = count + 1
+			collected_chars[count] = ch
+		else
+			break -- Stop collecting if we hit a non-Vietnamese character
 		end
 
-		-- Split the text into characters
-		local chars = split(text_chunk, "\\zs")
-
-		-- If the cursor is at the tail of a Vietnamese word, we need to include the cursor character
-		local i_start = #chars
-		if inserting and batch == 0 then
-			count = 1 -- We will add the cursor character
-			collected_chars[1] = chars[i_start] -- Add the cursor character to the right characters
-			i_start = i_start - 1 -- Start from the second character
+		if count == THRESHOLD_WORD_LEN then
+			break
 		end
-
-		for i = i_start, 1, -1 do
-			local ch = chars[i]
-			if is_vietnamese_char(ch) then
-				count = count + 1
-				collected_chars[count] = ch
-			else
-				-- If we hit a non-Vietnamese character, stop collecting
-				return reverse_tbl(collected_chars, count), count
-			end
-
-			-- Stop if we've already collected enough characters
-			if count >= THRESHOLD_WORD_LEN then
-				return reverse_tbl(collected_chars, count), count
-			end
-		end
-
-		if start_col == 0 then
-			return reverse_tbl(collected_chars, count), count
-		end
-
-		-- Go one batch further left
-		batch = batch + 1
-	until count >= THRESHOLD_WORD_LEN
+	end
 
 	return reverse_tbl(collected_chars, count), count
 end
@@ -140,37 +129,25 @@ end
 -- @return number: Number of right characters
 -- @return string: Character directly under the cursor
 local function collect_right_chars_from_cursor(bufnr, row_0based, col_0based)
+	local text_chunk =
+		nvim_buf_get_text(bufnr, row_0based, col_0based, row_0based, col_0based + WORST_CASE_WORD_LEN, {})[1]
+	if not text_chunk or text_chunk == "" then
+		return {}, 0
+	end
+
 	local collected_chars = {}
 	local count = 0
-	local batch = 0
-
-	repeat
-		local start_col = col_0based + THRESHOLD_WORD_LEN * batch
-		local end_col = col_0based + THRESHOLD_WORD_LEN * (batch + 1)
-		local text_chunk = nvim_buf_get_text(bufnr, row_0based, start_col, row_0based, end_col, {})[1]
-
-		if not text_chunk or text_chunk == "" then
-			break
+	for _, ch in iter_chars(text_chunk) do
+		if is_vietnamese_char(ch) then
+			count = count + 1
+			collected_chars[count] = ch
+		else
+			break -- Stop collecting if we hit a non-Vietnamese character
 		end
-
-		local chars = split(text_chunk, "\\zs")
-
-		for i = 1, #chars do
-			local ch = chars[i]
-			if is_vietnamese_char(ch) then
-				count = count + 1
-				collected_chars[count] = ch
-			else
-				return collected_chars, count
-			end
-
-			if count >= THRESHOLD_WORD_LEN then
-				return collected_chars, count
-			end
+		if count == THRESHOLD_WORD_LEN then
+			break -- Stop if we reach the threshold
 		end
-
-		batch = batch + 1
-	until count >= THRESHOLD_WORD_LEN
+	end
 
 	return collected_chars, count
 end
@@ -213,7 +190,6 @@ M.setup = function()
 	local inserted_char = ""
 	local inserting = false
 
-	local cursor_word = nil
 	local col_before_insert = -1
 
 	api.nvim_create_autocmd({
