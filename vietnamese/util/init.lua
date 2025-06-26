@@ -1,5 +1,5 @@
 local vim = vim
-local fn, api = vim.fn, vim.api
+local api = vim.api
 local nvim_buf_get_text = api.nvim_buf_get_text
 local tbl_concat = table.concat
 local str_utf_pos = vim.str_utf_pos
@@ -7,7 +7,7 @@ local str_utf_pos = vim.str_utf_pos
 local CONSTANT = require("vietnamese.constant")
 local UTF8_VNCHAR_COMPONENT = CONSTANT.UTF8_VNCHAR_COMPONENT
 local DIACRITIC_MAP = CONSTANT.DIACRITIC_MAP
-local BASE_VOWEL_PRIORITY = CONSTANT.BASE_VOWEL_PRIORITY
+local BASE_VOWEL_PRIORITY = CONSTANT.VOWEL_PRIORITY
 local ENUM_DIACRITIC = CONSTANT.ENUM_DIACRITIC
 
 local M = {}
@@ -38,7 +38,7 @@ function M.str2chars(str)
 	local len = #pos
 	for i = 1, len do
 		local start_i, start_in = pos[i], pos[i + 1]
-		chars[i] = str:sub(start_i, start_in ~= nil and start_in - 1 or nil)
+		chars[i] = str:sub(start_i, start_in ~= nil and start_in - 1 or #str)
 	end
 	return chars, len
 end
@@ -96,15 +96,9 @@ function M.lower(word)
 	return tbl_concat(chars)
 end
 
-function M.is_upper(c)
-	assert(c, "c must not be nil")
-	local comp = UTF8_VNCHAR_COMPONENT[c]
-	if not comp then
-		return c:match("^[A-Z]$") ~= nil
-	end
-	return comp.up ~= nil
-end
-
+--- Check if a character is uppercase
+--- @param c string The character to checks
+--- @return boolean True if the character is uppercase, false otherwise
 function M.is_lower(c)
 	assert(c, "c must not be nil")
 	local comp = UTF8_VNCHAR_COMPONENT[c]
@@ -126,6 +120,18 @@ function M.upper(word)
 	return tbl_concat(chars)
 end
 
+--- Check if a character is uppercase
+--- @param c string The character to checks
+--- @return boolean True if the character is uppercase, false otherwise
+function M.is_upper(c)
+	assert(c, "c must not be nil")
+	local comp = UTF8_VNCHAR_COMPONENT[c]
+	if not comp then
+		return c:match("^[A-Z]$") ~= nil
+	end
+	return comp.up ~= nil
+end
+
 --- Check if a character is a Vietnamese vowel
 --- @param c string The character to check
 --- @param strict boolean|nil If true, checks for strict Vietnamese vowels (no accept tone char like "á", "à", etc.)
@@ -136,6 +142,9 @@ function M.is_vietnamese_vowel(c, strict)
 	return BASE_VOWEL_PRIORITY[c] ~= nil
 end
 
+--- Check if a character is a level 1 Vietnamese vowel
+--- @param c string The character to checks
+--- @return boolean True if the character is a level 1 Vietnamese vowel, false otherwise
 function M.is_level1_vowel(c)
 	return c:match("^[aeiouyAEIOUY]$") ~= nil
 end
@@ -286,7 +295,7 @@ function M.find_vowel_seq_bounds(chars, chars_size)
 		end
 	end
 
-	if first == -1 then
+	if first < 0 then
 		return first, last, false
 	end
 
@@ -300,6 +309,18 @@ function M.find_vowel_seq_bounds(chars, chars_size)
 	return first, last, first == last
 end
 
+--- Get the conflict vowel code for a character
+--- @param c string The character to get the conflict vowel code for
+--- @return string The conflict vowel code, which is "a" if the character is "e" or "a", otherwise the character itself
+function M.get_conflict_vowel_code(c)
+	local lv1 = M.lower(M.level(c, 1))
+	if lv1 == "a" or lv1 == "e" then
+		-- a never combine with e, so return a
+		return "a"
+	end
+	return c
+end
+
 --- Check if a sequence of characters is a potential vowel sequence
 --- @param chars table The character Table
 --- @param chars_size integer The size of the character Table
@@ -310,8 +331,7 @@ end
 function M.is_potiental_vowel_seq(chars, chars_size, min_seq_len, max_seq_len, strict)
 	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
 	local start, stop = M.find_vowel_seq_bounds(chars, chars_size)
-
-	local len = stop - start + 1
+	local len = M.caculate_distance(start, stop)
 	if len < min_seq_len or len > max_seq_len then
 		return false
 	elseif stop - 1 > start then
@@ -343,10 +363,7 @@ function M.all_vowels(chars, chars_size, strict, i, j)
 	assert(chars, "chars must not be nil")
 	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
 
-	i = i and i > 0 and i or 1
-	j = j and j < chars_size and j or chars_size
-
-	for k = i, j do
+	for k = (i or 1), (j or chars_size) do
 		if not M.is_vietnamese_vowel(chars[k], strict) then
 			return false
 		end
@@ -354,30 +371,40 @@ function M.all_vowels(chars, chars_size, strict, i, j)
 	return true
 end
 
-function M.get_repetition_time_vowel(char, rejected_accent)
-	if M.is_vietnamese_vowel(char, rejected_accent) then
-		return math.maxinteger
+function M.get_max_repetition_time(char)
+	if char == nil or char == "" then
+		return char, 0
 	end
-	local level1_c = M.level(char, 1)
-	if level1_c == "o" or level1_c == "u" then
-		return 2
+
+	local lv1_c = M.lower(M.level(char, 1))
+	if lv1_c == "o" or lv1_c == "u" then
+		return lv1_c, 2
+	elseif lv1_c == "i" or lv1_c == "e" or lv1_c == "a" or lv1_c == "y" then
+		return lv1_c, 1
 	end
-	return 1
+	-- consonant
+	return lv1_c, 2
 end
 
+--- Check if the repetition of vowels in a character sequence exceeds the maximum allowed repetition 13:44
+--- @param chars table The character Table
+--- @param chars_size integer The size of the character table
+--- @param i integer|nil The starting index (1-based)
+--- @param j integer|nil The ending index (1-based)
+--- @return boolean True if the repetition exceeds the maximum allowed, false otherwise
 function M.is_exceeded_vowel_repetition_time(chars, chars_size, i, j)
 	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
-	i = i and i > 0 and i or 1
-	j = j and j < chars_size and j or chars_size
+	assert(j <= chars_size, "j must not be greater than chars_size")
+	assert(i <= j and i > 0, "i must not be greater than j, and i must be greater than 0")
 
-	local repeat_time = {}
-	for k = i, j do
-		local level1_c = M.level(chars[k], 1)
-		local repetition_times = (repeat_time[level1_c] or 0) + 1
-		if repetition_times > M.get_repetition_time_vowel(level1_c) then
+	local times = {}
+	for k = (i or 1), (j or chars_size) do
+		local level1_c, time = M.get_max_repetition_time(chars[k])
+		local curr_time = (times[level1_c] or 0) + 1
+		if curr_time > time then
 			return true
 		end
-		repeat_time[level1_c] = repetition_times
+		times[level1_c] = curr_time
 	end
 	return false
 end
@@ -390,6 +417,7 @@ end
 --- @return ENUM_DIACRITIC|nil The tone if it exists, or nil if not
 function M.decompose_char(c)
 	assert(c, "c must not be nil")
+
 	local dict = UTF8_VNCHAR_COMPONENT[c]
 	if not dict then
 		return c, c, nil, nil
@@ -397,6 +425,9 @@ function M.decompose_char(c)
 	return dict[1], dict[2], dict.shape, dict.tone
 end
 
+--- Copy a list to a new list
+--- @param list table: The list to copy_list
+--- @return table: A new list containing the same elements as the original copy_list
 function M.copy_list(list)
 	local new_list = {}
 	for i = 1, #list do
@@ -414,6 +445,14 @@ function M.col_to_byteoffset(bufnr, row0based, col0based)
 	--- byteoffset is start from 0
 	local byteoffset = #(nvim_buf_get_text(bufnr, row0based, 0, row0based, col0based, {})[1] or "")
 	return byteoffset
+end
+
+--- Calculate the distance between two indicates
+--- @param start_idex number: The starting index (1-based)
+--- @param end_idx number: The ending index (1-based)
+--- @return number: The distance between the two indicates
+function M.caculate_distance(start_idex, end_idx)
+	return end_idx - start_idex + 1
 end
 
 return M

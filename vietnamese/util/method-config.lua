@@ -54,7 +54,7 @@ function M.get_tone_diacritic(key, base_char, method_config, strict)
 end
 
 --- Get the shape diacritic for a given key and base character.
-function M.get_shape(key, base_char, method_config, strict)
+function M.get_shape_diacritic(key, base_char, method_config, strict)
 	base_char = strict and base_char or util.level(base_char, 1)
 	local diacritic_map = DIACRITIC_MAP[base_char]
 	if diacritic_map then
@@ -70,7 +70,7 @@ end
 --- Get the diacritic for a given key and base character.
 function M.get_diacritic(key, base_char, method_config, strict)
 	local diacritic = M.get_tone_diacritic(key, base_char, method_config, strict)
-		or M.get_shape(key, base_char, method_config, strict)
+		or M.get_shape_diacritic(key, base_char, method_config, strict)
 
 	if diacritic then
 		return diacritic
