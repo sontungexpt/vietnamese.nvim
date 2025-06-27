@@ -10,13 +10,14 @@ function M.is_tone_key(key, method_config)
 end
 
 function M.is_shape_key(key, method_config)
-	key = key:lower()
-	for _, v in pairs(method_config.shape_keys) do
-		if v[key] then
-			return true
-		end
-	end
-	return false
+	return method_config.shape_keys[key:lower()] ~= nil
+
+	-- key =  key:lower()
+	-- for _, v in pairs(method_config.shape_keys) do if v[key] then
+	-- 		return true
+	-- 	end
+	-- end
+	-- return false
 end
 
 --- Check if a key is a tone removal key.
@@ -53,18 +54,47 @@ function M.get_tone_diacritic(key, base_char, method_config, strict)
 	return nil
 end
 
+function M.has_multi_shape_effects(key, method_config)
+	local shape_map = method_config.shape_keys[key:lower()]
+	if not shape_map then
+		return false
+	end
+	local k, _ = next(shape_map)
+	return next(shape_map, k) ~= nil
+end
+
 --- Get the shape diacritic for a given key and base character.
 function M.get_shape_diacritic(key, base_char, method_config, strict)
-	base_char = strict and base_char or util.level(base_char, 1)
-	local diacritic_map = DIACRITIC_MAP[base_char]
-	if diacritic_map then
-		local shape_keys = method_config.shape_keys[base_char:lower()]
-		local diacritic = shape_keys and shape_keys[key]
-		if diacritic and diacritic_map[diacritic] then
-			return diacritic
-		end
+	--- check existence of shape_keys in method_config
+	local shape_map = method_config.shape_keys[key:lower()]
+	if not shape_map then
+		return nil
 	end
-	return nil
+
+	base_char = strict and base_char or util.level(base_char, 1)
+	local diacritic = shape_map[util.lower(base_char)]
+	if not diacritic then
+		return nil
+	end
+
+	-- check the valid diacritic in DIACRITIC_MAP
+	local diacritic_map = DIACRITIC_MAP[base_char]
+	if not diacritic_map or not diacritic_map[diacritic] then
+		return nil
+	end
+
+	return diacritic
+
+	-- base_char = strict and base_char or util.level(base_char, 1)
+	-- local diacritic_map = DIACRITIC_MAP[base_char]
+	-- if diacritic_map then
+	-- 	local shape_keys = method_config.shape_keys[util.lower(base_char)]
+	-- 	local diacritic = shape_keys and shape_keys[key]
+	-- 	if diacritic and diacritic_map[diacritic] then
+	-- 		return diacritic
+	-- 	end
+	-- end
+	-- return nil
 end
 
 --- Get the diacritic for a given key and base character.
@@ -75,7 +105,7 @@ function M.get_diacritic(key, base_char, method_config, strict)
 	if diacritic then
 		return diacritic
 	elseif M.is_tone_removal_key(key, method_config) and util.has_tone_marked(base_char) then
-		return CONSTANT.ENUM_DIACRITIC.FLAT
+		return CONSTANT.Diacritic.Flat
 	end
 	return nil
 end

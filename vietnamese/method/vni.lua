@@ -1,20 +1,20 @@
-local ENUM_DIACRITIC = require("vietnamese.constant").ENUM_DIACRITIC
+local ENUM_DIACRITIC = require("vietnamese.constant").Diacritic
 
 local M = {
 	tone_keys = {
 		["1"] = ENUM_DIACRITIC.ACUTE,
-		["2"] = ENUM_DIACRITIC.GRAVE,
-		["3"] = ENUM_DIACRITIC.HOOK,
-		["4"] = ENUM_DIACRITIC.TILDE,
-		["5"] = ENUM_DIACRITIC.DOT,
+		["2"] = ENUM_DIACRITIC.Grave,
+		["3"] = ENUM_DIACRITIC.Hook,
+		["4"] = ENUM_DIACRITIC.Tildle,
+		["5"] = ENUM_DIACRITIC.Dot,
 	},
 	tone_removal_keys = { "z" },
 	shape_keys = {
-		a = { a = ENUM_DIACRITIC.CIRCUMFLEX, w = ENUM_DIACRITIC.BREVE },
-		e = { e = ENUM_DIACRITIC.CIRCUMFLEX, w = ENUM_DIACRITIC.CIRCUMFLEX },
-		o = { o = ENUM_DIACRITIC.CIRCUMFLEX, w = ENUM_DIACRITIC.HORN },
-		u = { u = ENUM_DIACRITIC.HORN, w = ENUM_DIACRITIC.HORN },
-		d = { d = ENUM_DIACRITIC.HORIZONTAL_STROKE },
+		a = { a = ENUM_DIACRITIC.Circumflex, w = ENUM_DIACRITIC.Breve },
+		e = { e = ENUM_DIACRITIC.Circumflex, w = ENUM_DIACRITIC.Circumflex },
+		o = { o = ENUM_DIACRITIC.Circumflex, w = ENUM_DIACRITIC.Horn },
+		u = { u = ENUM_DIACRITIC.Horn, w = ENUM_DIACRITIC.Horn },
+		d = { d = ENUM_DIACRITIC.HorizontalStroke },
 	},
 	char_map = {
 		[""] = { w = "ư", W = "Ư" },

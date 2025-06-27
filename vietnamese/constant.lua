@@ -13,33 +13,33 @@ local DIACRITIC_HORN = 8
 local DIACRITIC_HORIZONTAL_STROKE = 9
 
 M = {
-	--- @enum ENUM_DIACRITIC
-	ENUM_DIACRITIC = {
-		FLAT = DIACRITIC_FLAT,
+	--- @enum Diacritic
+	Diacritic = {
+		Flat = DIACRITIC_FLAT,
 		ACUTE = DIACRITIC_ACUTE,
-		GRAVE = DIACRITIC_GRAVE,
-		HOOK = DIACRITIC_HOOK,
-		TILDE = DIACRITIC_TILDE,
-		DOT = DIACRITIC_DOT,
-		CIRCUMFLEX = DIACRITIC_CIRCUMFLEX,
-		BREVE = DIACRITIC_BREVE,
-		HORN = DIACRITIC_HORN,
-		HORIZONTAL_STROKE = DIACRITIC_HORIZONTAL_STROKE,
+		Grave = DIACRITIC_GRAVE,
+		Hook = DIACRITIC_HOOK,
+		Tildle = DIACRITIC_TILDE,
+		Dot = DIACRITIC_DOT,
+		Circumflex = DIACRITIC_CIRCUMFLEX,
+		Breve = DIACRITIC_BREVE,
+		Horn = DIACRITIC_HORN,
+		HorizontalStroke = DIACRITIC_HORIZONTAL_STROKE,
 
 		--- Check if the diacritic is flat (no tone)
-		--- @param diacritic ENUM_DIACRITIC
+		--- @param diacritic Diacritic
 		--- @return boolean
 		is_flat = function(diacritic)
 			return diacritic == DIACRITIC_FLAT
 		end,
 		--- Check if the diacritic is a tone
-		--- @param diacritic ENUM_DIACRITIC
+		--- @param diacritic Diacritic
 		--- @return boolean
 		is_tone = function(diacritic)
 			return diacritic > DIACRITIC_FLAT and diacritic < DIACRITIC_CIRCUMFLEX
 		end,
 		--- Check if the diacritic is a shape
-		--- @param diacritic ENUM_DIACRITIC
+		--- @param diacritic Diacritic
 		--- @return boolean
 		is_shape = function(diacritic)
 			return diacritic > DIACRITIC_DOT
@@ -65,7 +65,7 @@ M = {
 
 		["y"] = 12,
 	},
-	--- @type table<string, { [1]: string, [2]: string?, [3]: string?, tone?: ENUM_DIACRITIC, shape?: ENUM_DIACRITIC, up: string, lo: string }>
+	--- @type table<string, { [1]: string, [2]: string?, [3]: string?, tone?: Diacritic, shape?: Diacritic, up: string, lo: string }>
 	--- UTF8_VN_CHAR_DICT maps a Vietnamese character with tone/diacritic
 	--- to its components: [base, shape, tone], and optionally a tone enum.
 	UTF8_VNCHAR_COMPONENT = {

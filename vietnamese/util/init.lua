@@ -8,7 +8,7 @@ local CONSTANT = require("vietnamese.constant")
 local UTF8_VNCHAR_COMPONENT = CONSTANT.UTF8_VNCHAR_COMPONENT
 local DIACRITIC_MAP = CONSTANT.DIACRITIC_MAP
 local BASE_VOWEL_PRIORITY = CONSTANT.VOWEL_PRIORITY
-local ENUM_DIACRITIC = CONSTANT.ENUM_DIACRITIC
+local Diacritic = CONSTANT.Diacritic
 
 local M = {}
 
@@ -177,9 +177,32 @@ M.has_tone_marked = function(c)
 	return UTF8_VNCHAR_COMPONENT[c] ~= nil and UTF8_VNCHAR_COMPONENT[c].tone ~= nil
 end
 
+--- Check if a character has a shape
+--- @param c string The character to checks
+--- @return boolean True if the character has a shape, false otherwise
+M.has_shape = function(c)
+	return UTF8_VNCHAR_COMPONENT[c] ~= nil and UTF8_VNCHAR_COMPONENT[c].shape ~= nil
+end
+
+M.strip_shape = function(c)
+	assert(c, "c must not be nil")
+	local dict = UTF8_VNCHAR_COMPONENT[c]
+	if not dict or not dict.shape then
+		return c, nil
+	end
+	local lv1 = dict[1]
+	local diacritic_map = DIACRITIC_MAP[lv1]
+	local curr_tone = dict.tone
+	if diacritic_map and curr_tone then
+		-- restore the tone if it exists
+		return diacritic_map[curr_tone] or c, dict.shape
+	end
+	return lv1, dict.shape
+end
+
 --- Attach a tone to a level 2 Vietnamese character
 --- @param lv2_c string The level 2 character to attach the tone to
---- @param tone ENUM_DIACRITIC The tone to attach_tone_to_lv2_char
+--- @param tone Diacritic The tone to attach_tone_to_lv2_char
 --- @return string The character with the attached tone, or the original character if no tone was found
 --- @return boolean True if the tone was successfully attached, false otherwise
 M.merge_tone_to_lv2_vowel = function(lv2_c, tone)
@@ -197,17 +220,17 @@ end
 
 --- Merge a diacritic into a character
 --- @param c string The character to merge the diacritic into
---- @param diacritic ENUM_DIACRITIC The diacritic to merge
+--- @param diacritic Diacritic The diacritic to merge
 --- @param force boolean|nil If true, forces the merge even if the diacritic is not applicable
 --- @return string The character with the merged diacritic, or the original character if no merge was possible
---- @return ENUM_DIACRITIC|nil The original diacritic if it was replaced, or nil if no replace was possible
+--- @return Diacritic|nil The original diacritic if it was replaced, or nil if no replace was possible
 M.merge_diacritic = function(c, diacritic, force)
 	assert(c ~= nil, "c must not be nil")
 	assert(diacritic ~= nil, "diacritic must not be nil")
-	if ENUM_DIACRITIC.is_flat(diacritic) then
+	if Diacritic.is_flat(diacritic) then
 		return M.strip_tone(c)
 	end
-	local is_tone = ENUM_DIACRITIC.is_tone(diacritic)
+	local is_tone = Diacritic.is_tone(diacritic)
 	local lv1, lv2, shape, tone = M.decompose_char(c)
 	if is_tone then
 		local tone_map = DIACRITIC_MAP[lv2]
@@ -233,9 +256,9 @@ M.merge_diacritic = function(c, diacritic, force)
 	if not shaped then
 		-- not a valid diacritic for this char
 		return c, nil
-	elseif tone and DIACRITIC_MAP[shaped] and DIACRITIC_MAP[shaped][tone] then
+	elseif tone and DIACRITIC_MAP[shaped] then
 		-- restore the tone if it exists
-		return DIACRITIC_MAP[shaped][tone], shape
+		return DIACRITIC_MAP[shaped][tone] or shaped, shape
 	end
 	return shaped, shape
 end
@@ -261,13 +284,24 @@ end
 --- Strip the tone from a character
 --- @param c string The character to strip the tone from
 --- @return string The character without the tone (lv2 char), or the original character if no tone was found
---- @return ENUM_DIACRITIC|nil The tone if it was stripped, or nil if no tone was found
+--- @return Diacritic|nil The tone if it was stripped, or nil if no tone was found
 M.strip_tone = function(c)
 	local dict = UTF8_VNCHAR_COMPONENT[c]
 	if not dict then
 		return c, nil
 	end
 	return dict[2], dict.tone
+end
+
+--- Get the tone mark of a character
+--- @param c string The character to get the tone mark from
+--- @return Diacritic|nil The tone mark if it exists, or nil if not
+M.get_tone_mark = function(c)
+	local dict = UTF8_VNCHAR_COMPONENT[c]
+	if not dict then
+		return nil
+	end
+	return dict.tone
 end
 
 M.strip_diacritics = function(c)
@@ -413,8 +447,8 @@ end
 --- @param c string The character to decompose_char
 --- @return string The base character at level 1
 --- @return string The character at level 2
---- @return ENUM_DIACRITIC|nil The shape diacritic if it exists, or nil if not
---- @return ENUM_DIACRITIC|nil The tone if it exists, or nil if not
+--- @return Diacritic|nil The shape diacritic if it exists, or nil if not
+--- @return Diacritic|nil The tone if it exists, or nil if not
 function M.decompose_char(c)
 	assert(c, "c must not be nil")
 
