@@ -1,49 +1,50 @@
 local M = {}
 
-local DIACRITIC_FLAT = 0
-local DIACRITIC_ACUTE = 1
-local DIACRITIC_GRAVE = 2
-local DIACRITIC_HOOK = 3
-local DIACRITIC_TILDE = 4
-local DIACRITIC_DOT = 5
-local DIACRITIC_CIRCUMFLEX = 6
-local DIACRITIC_BREVE = 7
-local DIACRITIC_HORN = 8
-local DIACRITIC_HORIZONTAL_STROKE = 9
+--- @enum Diacritic
+local Diacritic = {
+	Flat = DIACRITIC_FLAT,
+	ACUTE = DIACRITIC_ACUTE,
+	Grave = DIACRITIC_GRAVE,
+	Hook = DIACRITIC_HOOK,
+	Tildle = DIACRITIC_TILDE,
+	Dot = DIACRITIC_DOT,
+	Circumflex = DIACRITIC_CIRCUMFLEX,
+	Breve = DIACRITIC_BREVE,
+	Horn = DIACRITIC_HORN,
+	HorizontalStroke = DIACRITIC_HORIZONTAL_STROKE,
+
+	--- Check if the diacritic is flat (no tone)
+	--- @param diacritic Diacritic
+	--- @return boolean
+	is_flat = function(diacritic)
+		return diacritic == DIACRITIC_FLAT
+	end,
+	--- Check if the diacritic is a tone
+	--- @param diacritic Diacritic
+	--- @return boolean
+	is_tone = function(diacritic)
+		return diacritic > DIACRITIC_FLAT and diacritic < DIACRITIC_CIRCUMFLEX
+	end,
+	--- Check if the diacritic is a shape
+	--- @param diacritic Diacritic
+	--- @return boolean
+	is_shape = function(diacritic)
+		return diacritic > DIACRITIC_DOT
+	end,
+}
+local DIACRITIC_FLAT = Diacritic.Flat
+local DIACRITIC_ACUTE = Diacritic.ACUTE
+local DIACRITIC_GRAVE = Diacritic.Grave
+local DIACRITIC_HOOK = Diacritic.Hook
+local DIACRITIC_TILDE = Diacritic.Tildle
+local DIACRITIC_DOT = Diacritic.Dot
+local DIACRITIC_CIRCUMFLEX = Diacritic.Circumflex
+local DIACRITIC_BREVE = Diacritic.Breve
+local DIACRITIC_HORN = Diacritic.Horn
+local DIACRITIC_HORIZONTAL_STROKE = Diacritic.HorizontalStroke
 
 M = {
-	--- @enum Diacritic
-	Diacritic = {
-		Flat = DIACRITIC_FLAT,
-		ACUTE = DIACRITIC_ACUTE,
-		Grave = DIACRITIC_GRAVE,
-		Hook = DIACRITIC_HOOK,
-		Tildle = DIACRITIC_TILDE,
-		Dot = DIACRITIC_DOT,
-		Circumflex = DIACRITIC_CIRCUMFLEX,
-		Breve = DIACRITIC_BREVE,
-		Horn = DIACRITIC_HORN,
-		HorizontalStroke = DIACRITIC_HORIZONTAL_STROKE,
-
-		--- Check if the diacritic is flat (no tone)
-		--- @param diacritic Diacritic
-		--- @return boolean
-		is_flat = function(diacritic)
-			return diacritic == DIACRITIC_FLAT
-		end,
-		--- Check if the diacritic is a tone
-		--- @param diacritic Diacritic
-		--- @return boolean
-		is_tone = function(diacritic)
-			return diacritic > DIACRITIC_FLAT and diacritic < DIACRITIC_CIRCUMFLEX
-		end,
-		--- Check if the diacritic is a shape
-		--- @param diacritic Diacritic
-		--- @return boolean
-		is_shape = function(diacritic)
-			return diacritic > DIACRITIC_DOT
-		end,
-	},
+	Diacritic = Diacritic,
 	--- @type table<string, number>
 	--- VOWEL_ACCENT_PRIORITY maps Vietnamese vowels with accents to their priority.
 	VOWEL_PRIORITY = {
