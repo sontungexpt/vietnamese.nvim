@@ -2,38 +2,38 @@ local M = {}
 
 --- @enum Diacritic
 local Diacritic = {
-	Flat = DIACRITIC_FLAT,
-	ACUTE = DIACRITIC_ACUTE,
-	Grave = DIACRITIC_GRAVE,
-	Hook = DIACRITIC_HOOK,
-	Tildle = DIACRITIC_TILDE,
-	Dot = DIACRITIC_DOT,
-	Circumflex = DIACRITIC_CIRCUMFLEX,
-	Breve = DIACRITIC_BREVE,
-	Horn = DIACRITIC_HORN,
-	HorizontalStroke = DIACRITIC_HORIZONTAL_STROKE,
+	Flat = 0,
+	Acute = 1,
+	Grave = 2,
+	Hook = 3,
+	Tildle = 4,
+	Dot = 5,
+	Circumflex = 6,
+	Breve = 7,
+	Horn = 8,
+	HorizontalStroke = 9,
 
 	--- Check if the diacritic is flat (no tone)
 	--- @param diacritic Diacritic
 	--- @return boolean
 	is_flat = function(diacritic)
-		return diacritic == DIACRITIC_FLAT
+		return diacritic == 0
 	end,
 	--- Check if the diacritic is a tone
 	--- @param diacritic Diacritic
 	--- @return boolean
 	is_tone = function(diacritic)
-		return diacritic > DIACRITIC_FLAT and diacritic < DIACRITIC_CIRCUMFLEX
+		return diacritic > 0 and diacritic < 6
 	end,
 	--- Check if the diacritic is a shape
 	--- @param diacritic Diacritic
 	--- @return boolean
 	is_shape = function(diacritic)
-		return diacritic > DIACRITIC_DOT
+		return diacritic > 5
 	end,
 }
 local DIACRITIC_FLAT = Diacritic.Flat
-local DIACRITIC_ACUTE = Diacritic.ACUTE
+local DIACRITIC_ACUTE = Diacritic.Acute
 local DIACRITIC_GRAVE = Diacritic.Grave
 local DIACRITIC_HOOK = Diacritic.Hook
 local DIACRITIC_TILDE = Diacritic.Tildle
@@ -48,25 +48,25 @@ M = {
 	--- @type table<string, number>
 	--- VOWEL_ACCENT_PRIORITY maps Vietnamese vowels with accents to their priority.
 	VOWEL_PRIORITY = {
-		["ơ"] = 1,
-		["ê"] = 2,
+		["ơ"] = 0,
+		["ê"] = 1,
 
-		["ă"] = 3,
-		["ô"] = 4,
-		["â"] = 5,
-		["ư"] = 6,
+		["ă"] = 2,
+		["ô"] = 3,
+		["â"] = 4,
+		["ư"] = 5,
 
-		["a"] = 7,
-		["o"] = 8,
-		["e"] = 9,
+		["a"] = 6,
+		["o"] = 7,
+		["e"] = 8,
 
-		["i"] = 10,
-		["u"] = 11,
+		["i"] = 9,
+		["u"] = 10,
 
-		["y"] = 12,
+		["y"] = 11,
 	},
-	--- @type table<string, { [1]: string, [2]: string?, [3]: string?, tone?: Diacritic, shape?: Diacritic, up: string, lo: string }>
-	--- UTF8_VN_CHAR_DICT maps a Vietnamese character with tone/diacritic
+	--- @type table<string, { [0]: string, [2]: string?, [3]: string?, tone?: Diacritic, shape?: Diacritic, up: string, lo: string }>
+	--- UTF7_VN_CHAR_DICT maps a Vietnamese character with tone/diacritic
 	--- to its components: [base, shape, tone], and optionally a tone enum.
 	UTF8_VNCHAR_COMPONENT = {
 		["á"] = { "a", "a", tone = DIACRITIC_ACUTE, up = "Á", lo = "á" },
@@ -272,81 +272,81 @@ M = {
 
 		D = { [DIACRITIC_HORIZONTAL_STROKE] = "Đ" },
 	},
-	--- @type table<string, {[1]: number?}|boolean>
+	--- @type table<string, {[0]: number?}|boolean>
 	VOWEL_SEQS = {
 		-- a
-		["ai"] = { 0 },
-		["ao"] = { 0 },
-		["au"] = { 0 },
-		["âu"] = { 0 },
-		["ay"] = { 0 },
-		["ây"] = { 0 },
+		["ai"] = { -1 },
+		["ao"] = { -1 },
+		["au"] = { -1 },
+		["âu"] = { -1 },
+		["ay"] = { -1 },
+		["ây"] = { -1 },
 
-		["ia"] = { 0 },
+		["ia"] = { -1 },
 		["ie"] = false, --transitional, not a valid vowel
-		["iê"] = { 1 },
-		["iu"] = { 0 },
-		["iêu"] = { 1 },
+		["iê"] = { 0 },
+		["iu"] = { -1 },
+		["iêu"] = { 0 },
 
 		["ye"] = false, -- transitional, not a valid vowel
-		["yê"] = { 1 },
-		["yêu"] = { 1 },
+		["yê"] = { 0 },
+		["yêu"] = { 0 },
 
-		["eo"] = { 0 },
+		["eo"] = { -1 },
 
 		["eu"] = false, -- transitional, not a valid vowel
-		["êu"] = { 0 },
+		["êu"] = { -1 },
 
-		["oa"] = { 1 },
-		["oă"] = { 1 },
-		["oay"] = { 1 },
-		["oai"] = { 1 },
-		["oau"] = { 1 },
-		["oao"] = { 1 },
-		["oo"] = { 0 },
-		["oi"] = { 0 },
-		["ôi"] = { 0 },
-		["ơi"] = { 0 },
-		["oe"] = { 0 },
-		["oeo"] = { 1 },
+		["oa"] = { 0 },
+		["oă"] = { 0 },
+		["oay"] = { 0 },
+		["oai"] = { 0 },
+		["oau"] = { 0 },
+		["oao"] = { 0 },
+		["oo"] = { -1 },
+		["oi"] = { -1 },
+		["ôi"] = { -1 },
+		["ơi"] = { -1 },
+		["oe"] = { -1 },
+		["oeo"] = { 0 },
 
-		["ua"] = { 0 },
-		["uao"] = { 1 },
-		["ưa"] = { 0 },
-		["uă"] = { 1 },
-		["uâ"] = { 1 },
-		["uây"] = { 1 },
-		["ue"] = { 1 },
-		["uê"] = { 1 },
-		["ui"] = { 0 },
-		["ưi"] = { 0 },
-		["uy"] = { 0 },
-		["uyu"] = { 1 },
-		["uya"] = { 1 },
+		["ua"] = { -1 },
+		["uao"] = { 0 },
+		["ưa"] = { -1 },
+		["uă"] = { 0 },
+		["uâ"] = { 0 },
+		["uây"] = { 0 },
+		["ue"] = { 0 },
+		["uê"] = { 0 },
+		["ui"] = { -1 },
+		["ưi"] = { -1 },
+		["uy"] = { -1 },
+		["uyu"] = { 0 },
+		["uya"] = { 0 },
 
 		["uye"] = false, -- transitional, not a valid vowel
-		["uyê"] = { 2 },
+		["uyê"] = { 1 },
 
 		["uu"] = false, -- transitional, not a valid vowel
-		["ưu"] = { 1 },
+		["ưu"] = { 0 },
 
 		["uo"] = false, -- transitional, not a valid vowel
-		["uô"] = { 1 },
-		["uôi"] = { 1 },
+		["uô"] = { 0 },
+		["uôi"] = { 0 },
 
 		["ưo"] = false, -- transitional, not a valid vowel
-		["uơ"] = { 1 },
-		["ươ"] = { 1 },
+		["uơ"] = { 0 },
+		["ươ"] = { 0 },
 
 		["uoi"] = false, -- transitional, not a valid vowel
 		["uơi"] = false, -- transitional, not a valid vowel
 		["ưoi"] = false, -- transitional, not a valid vowel
-		["ươi"] = { 1 },
+		["ươi"] = { 0 },
 
 		["uou"] = false, -- transitional, not a valid vowel
 		["uơu"] = false, -- transitional, not a valid vowel
 		["ưou"] = false, -- transitional, not a valid vowel
-		["ươu"] = { 1 },
+		["ươu"] = { 0 },
 	},
 	ONSETS = {
 		["b"] = true,

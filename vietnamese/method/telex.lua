@@ -2,7 +2,7 @@ local ENUM_DIACRITIC = require("vietnamese.constant").Diacritic
 
 local M = {
 	tone_keys = {
-		["s"] = ENUM_DIACRITIC.ACUTE,
+		["s"] = ENUM_DIACRITIC.Acute,
 		["f"] = ENUM_DIACRITIC.Grave,
 		["r"] = ENUM_DIACRITIC.Hook,
 		["x"] = ENUM_DIACRITIC.Tildle,

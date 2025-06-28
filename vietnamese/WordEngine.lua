@@ -510,17 +510,15 @@ function WordEngine:processes_shape(method_config)
 	--
 	local effects = {}
 	local ecount = 0
-	if util.is_d(word[1]) then
-		local shape_diacritic = method_config_util.get_shape_diacritic(key, word[1], method_config)
-		if shape_diacritic then
-			ecount = ecount + 1
-			effects[ecount] = {
-				[1] = 1, -- index of the character in the word
-				[2] = word[1], -- character itself
-				[3] = shape_diacritic, -- diacritic to apply
-				[4] = util.has_shape(word[1]), -- if the character already has a shape diacritic
-			}
-		end
+	local shape_diacritic_d = util.is_d(word[1]) and method_config_util.get_shape_diacritic(key, word[1], method_config)
+	if shape_diacritic_d then
+		ecount = ecount + 1
+		effects[ecount] = {
+			[1] = 1, -- index of the character in the word
+			[2] = word[1], -- character itself
+			[3] = shape_diacritic_d, -- diacritic to apply
+			[4] = util.has_shape(word[1]), -- if the character already has a shape diacritic
+		}
 	else
 		-- to make sure that in the "qu" or "gi" case "u" and "i" is consider ass a consonant
 		for i = vs, ve do
@@ -578,7 +576,12 @@ function WordEngine:processes_shape(method_config)
 
 		-- sort by has shape
 		table.sort(effects, function(a, b)
-			return a[4] and not b[4]
+			if a[4] and not b[4] then
+				return true
+			elseif not a[4] and b[4] then
+				return false
+			end
+			return a[1] < b[1]
 		end)
 	end
 
