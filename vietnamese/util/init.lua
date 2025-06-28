@@ -501,4 +501,11 @@ function M.caculate_distance(start_idex, end_idx)
 	return end_idx - start_idex + 1
 end
 
+--- Check if a character is "d" or "đ" or "D" or "Đ"
+--- @param c string: The character to check
+--- @return boolean: True if the character is "d" or "đ" or "D" or "Đ", false otherwise
+function M.is_d(c)
+	return c == "d" or c == "D" or c == "đ" or c == "Đ"
+end
+
 return M

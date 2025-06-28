@@ -1,6 +1,5 @@
 local M = {}
 
--- TONE ENUM
 local DIACRITIC_FLAT = 0
 local DIACRITIC_ACUTE = 1
 local DIACRITIC_GRAVE = 2
@@ -323,20 +322,30 @@ M = {
 		["uy"] = { 0 },
 		["uyu"] = { 1 },
 		["uya"] = { 1 },
+
 		["uye"] = false, -- transitional, not a valid vowel
 		["uyê"] = { 2 },
+
 		["uu"] = false, -- transitional, not a valid vowel
 		["ưu"] = { 1 },
+
 		["uo"] = false, -- transitional, not a valid vowel
 		["uô"] = { 1 },
 		["uôi"] = { 1 },
+
 		["ưo"] = false, -- transitional, not a valid vowel
 		["uơ"] = { 1 },
 		["ươ"] = { 1 },
+
+		["uoi"] = false, -- transitional, not a valid vowel
+		["uơi"] = false, -- transitional, not a valid vowel
+		["ưoi"] = false, -- transitional, not a valid vowel
 		["ươi"] = { 1 },
+
+		["uou"] = false, -- transitional, not a valid vowel
+		["uơu"] = false, -- transitional, not a valid vowel
+		["ưou"] = false, -- transitional, not a valid vowel
 		["ươu"] = { 1 },
-		["uơu"] = { 1 },
-		["uơi"] = { 1 },
 	},
 	ONSETS = {
 		["b"] = true,

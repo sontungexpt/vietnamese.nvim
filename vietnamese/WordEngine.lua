@@ -5,6 +5,7 @@ local CONSTANT = require("vietnamese.constant")
 local ONSETS = CONSTANT.ONSETS
 local CODAS = CONSTANT.CODAS
 local VOWEL_SEQS = CONSTANT.VOWEL_SEQS
+local Diacritic = CONSTANT.Diacritic
 local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VNCHAR_COMPONENT
 local VOWEL_PRIORITY = CONSTANT.VOWEL_PRIORITY
 
@@ -25,6 +26,7 @@ local AnalysisStatus = {
 	DiacriticReady = 1,
 	InvalidWord = 2,
 	ValidWord = 3,
+	MustAnalyze = 4, -- The word must be analyzed before processing
 }
 
 --- @enum VowelSeqStatus
@@ -102,7 +104,7 @@ function WordEngine:new(raw, cursor_char_index, insertion, raw_len)
 		analysis_status = AnalysisStatus.Unanalyzed, -- state of the word structure analysis
 
 		-- this fields only have the real value after analysis
-		tone_mark = nil, -- the tone mark of the main vowel if it has one
+		tone_mark = Diacritic.Flat, -- the tone mark of the main vowel if it has one
 		tone_mark_idx = -1, -- the index of the tone mark in the word (1-based)
 		vowel_start = -1,
 		vowel_end = -2, -- -2 to make sure that it is not valid when loop from start to end
@@ -110,7 +112,6 @@ function WordEngine:new(raw, cursor_char_index, insertion, raw_len)
 		vowel_start_adjust = 0, -- adjust the vowel start index if the onset overlaps with the vowel
 	}
 
-	-- error(vim.inspect(_privates[obj]))
 	return obj
 end
 
@@ -201,8 +202,10 @@ function WordEngine:update_tone_mark_position(method_config)
 		return false
 	end
 
-	chars[tidx] = util.level(chars[tidx], 2)
-	chars[new_idx] = util.merge_tone_to_lv2_vowel(vowel, tone)
+	p.word[tidx] = util.level(chars[tidx], 2)
+	p.word[new_idx] = util.merge_tone_to_lv2_vowel(vowel, tone)
+	p.tone_mark = tone
+	p.tone_mark_idx = new_idx
 	return true
 end
 
@@ -234,7 +237,7 @@ function WordEngine:find_tone_mark_position(style, force_recheck)
 	-- only one vowel in the word
 	if vs == ve then
 		return word[vs], vs
-	elseif not force_recheck and tone_mark_idx > 0 then
+	elseif not force_recheck and not p.analysis_status == AnalysisStatus.MustAnalyze and tone_mark_idx > 0 then
 		return word[tone_mark_idx], tone_mark_idx
 	end
 
@@ -273,10 +276,10 @@ end
 --- @param vowel_end integer The index of the last vowel (1-based)
 --- @return VowelSeqStatus The status of the vowel sequence
 --- @return table|nil The normalized vowel sequence if it exists
---- @return Diacritic|nil The tone mark if it exists
+--- @return Diacritic The tone mark if it exists
 --- @return integer The index of the tone mark in the vowel sequence (1-based), or -1 if no tone mark exists
 local function detect_vowel_seq_and_tone(chars, chars_size, vowel_start, vowel_end)
-	local tone_mark = nil
+	local tone_mark = Diacritic.Flat
 	local status = VowelSeqStatus.Valid
 	if vowel_start == vowel_end then
 		tone_mark = util.get_tone_mark(chars[vowel_start])
@@ -294,8 +297,10 @@ local function detect_vowel_seq_and_tone(chars, chars_size, vowel_start, vowel_e
 	local tone_mark_idx = -1
 	-- Check if the word has a tone-marked vowel
 	for i = vowel_start, vowel_end do
-		vnorms[i], tone_mark = util.strip_tone(chars[i])
-		if tone_mark then
+		local tone
+		vnorms[i], tone = util.strip_tone(chars[i])
+		if tone then
+			tone_mark = tone
 			tone_mark_idx = i
 		end
 	end
@@ -408,6 +413,7 @@ function WordEngine:analyze_structure(force)
 
 	local vowel_seq_status
 	vowel_seq_status, p.vnorms, p.tone_mark, p.tone_mark_idx = detect_vowel_seq_and_tone(word, len, vs, ve)
+
 	if vowel_seq_status == VowelSeqStatus.Invalid then
 		p.analysis_status = AnalysisStatus.InvalidWord
 		return p.analysis_status
@@ -491,71 +497,127 @@ end
 
 function WordEngine:processes_shape(method_config)
 	local p = _privates[self]
+
+	assert(
+		p.analysis_status ~= AnalysisStatus.Unanalyzed,
+		"WordEngine:analyze_structure() must be called before processes_shape()"
+	)
+
 	local word, word_len, inserted_char_index = p.word, p.word_len, p.inserted_char_index
 	local vs, ve = p.vowel_start, p.vowel_end
 	local key = p.raw[inserted_char_index]
-	local vowel_len = util.caculate_distance(vs, ve)
-	-- local c_idex, shape_diacritic = nil, nil
 
-	local multi_effects = method_config_util.has_multi_shape_effects(key, method_config)
-
-	-- for single effect, we can apply it directly
-	if not multi_effects or vowel_len == 1 then
-		for i = 1, word_len do
-			local c = word[i]
-			local shape_diacritic = method_config_util.get_shape_diacritic(key, c, method_config)
-
-			if shape_diacritic and i < inserted_char_index then
-				local removed_c, curr_shape = util.strip_shape(c)
-				if curr_shape then
-					-- undo shape
-					p.word = util.copy_list(p.raw) -- make a copy of the word
-					p.word_len = p.raw_len
-					p.word[i] = removed_c
-					return true
-				end
-
-				word[i] = util.merge_diacritic(c, shape_diacritic)
-				-- not in vowel sequence
-				if i < vs or i > ve then
-					-- d
-					return true
-				else -- is in vowel sequence
-					local status, new_vowel_seq = detect_vowel_seq_and_tone(word, word_len, p.vowel_start, p.vowel_end)
-					if status == VowelSeqStatus.Valid then
-						p.vnorms = new_vowel_seq
-						self:update_tone_mark_position(method_config)
-						return true
-					else
-						p.word = util.copy_list(p.raw) -- make a copy of the word
-						p.word_len = p.raw_len
-						return false
-					end
-				end
-			end
+	--
+	local effects = {}
+	local ecount = 0
+	if util.is_d(word[1]) then
+		local shape_diacritic = method_config_util.get_shape_diacritic(key, word[1], method_config)
+		if shape_diacritic then
+			ecount = ecount + 1
+			effects[ecount] = {
+				[1] = 1, -- index of the character in the word
+				[2] = word[1], -- character itself
+				[3] = shape_diacritic, -- diacritic to apply
+				[4] = util.has_shape(word[1]), -- if the character already has a shape diacritic
+			}
 		end
 	else
-		-- for multi effects, we may need to multi chars
-		-- exp: press w key on "uo" add horn to "u" and "o"
-		-- local affectables = {}
-		-- local maybe_uo = false
-		-- for i = vs, ve do
-		-- 	local c = word[i]
-		-- 	local shape_diacritic = method_config_util.get_shape_diacritic(key, c, method_config)
-		-- 	if shape_diacritic then
-		-- 		local affectable = affectables[shape_diacritic]
-		-- 		if not affectable then
-		-- 			affectables[shape_diacritic] = { i }
-		-- 		else
-		-- 			maybe_uo = true
-		-- 			affectable[#affectable + 1] = i
-		-- 		end
-		-- 	end
-		-- end
-		-- if maybe_uo then
-		-- 	return false -- cannot apply multi effects to vowel sequence
-		-- end
+		-- to make sure that in the "qu" or "gi" case "u" and "i" is consider ass a consonant
+		for i = vs, ve do
+			local c = word[i]
+			local shape_diacritic = method_config_util.get_shape_diacritic(key, c, method_config)
+			if shape_diacritic then
+				ecount = ecount + 1
+				effects[ecount] = {
+					[1] = i,
+					[2] = c,
+					[3] = shape_diacritic,
+					[4] = util.has_shape(c),
+				}
+			end
+		end
 	end
+	if ecount == 0 then
+		return false -- no shape diacritic found
+	elseif ecount > 1 then
+		local effect1 = effects[1]
+		local effect2 = effects[2]
+
+		local is_uo_horn = effect1[3] == Diacritic.Horn
+			and effect2[3] == Diacritic.Horn
+			and util.level(effect1[2], 1) == "u"
+			and util.level(effect2[2], 1) == "o"
+			and effect2[1] - effect1[1] == 1
+
+		if is_uo_horn then
+			if effect2[1] >= inserted_char_index then
+				return false
+			elseif effect1[4] and effect2[4] then
+				-- restore the horn
+				p.word = util.copy_list(p.raw) -- make a copy of the word
+				p.word_len = p.raw_len
+				p.word[effect1[1]], _ = util.strip_shape(effect1[2])
+				p.word[effect2[1]], _ = util.strip_shape(effect2[2])
+				return true
+			end
+			p.word[effect1[1]] = util.merge_diacritic(effect1[2], effect1[3])
+			p.word[effect2[1]] = util.merge_diacritic(effect2[2], effect2[3])
+
+			local status, new_vnorms = detect_vowel_seq_and_tone(word, word_len, p.vowel_start, p.vowel_end)
+			if status == VowelSeqStatus.Valid then
+				p.vnorms = new_vnorms
+				self:update_tone_mark_position(method_config)
+				return true
+			end
+			-- can not apply the shape diacritic
+			p.word = util.copy_list(p.raw) -- make a copy of the word
+			p.word_len = p.raw_len
+			p.analysis_status = AnalysisStatus.MustAnalyze
+			return false
+		end
+
+		-- sort by has shape
+		table.sort(effects, function(a, b)
+			return a[4] and not b[4]
+		end)
+	end
+
+	for i = 1, ecount do
+		local effect = effects[i]
+		local effect_idx = effect[1]
+		if effect_idx >= inserted_char_index then
+			goto continue
+		end
+
+		if effect[4] then
+			-- restore shape diacritic
+			p.word = util.copy_list(p.raw) -- make a copy of the word
+			p.word_len = p.raw_len
+			p.word[effect_idx] = util.strip_shape(effect[2])
+			return true
+		end
+		word[effect_idx] = util.merge_diacritic(effect[2], effect[3])
+		-- not in vowel sequence means a consonant
+		-- d
+		if effect_idx < vs or effect_idx > ve then
+			return true
+		end
+		-- in vowel sequence
+		local status, new_vnorms = detect_vowel_seq_and_tone(word, word_len, p.vowel_start, p.vowel_end)
+		if status == VowelSeqStatus.Valid then
+			p.vnorms = new_vnorms
+			self:update_tone_mark_position(method_config)
+			return true
+		elseif i == ecount then
+			-- can not apply the shape diacritic
+			p.word = util.copy_list(p.raw) -- make a copy of the word
+			p.word_len = p.raw_len
+			p.analysis_status = AnalysisStatus.MustAnalyze
+			return false
+		end
+		::continue::
+	end
+
 	return false
 end
 
