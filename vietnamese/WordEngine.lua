@@ -49,14 +49,14 @@ WordEngine.__index = WordEngine
 --- @field raw string[] Original list of characters before modification
 --- @field raw_len integer Length of `raw`
 --- @field inserted_char_index integer? Index of the recently inserted character (if any)
---- @field cursor_char_index integer Current cursor position (1-based)
---- @field vowel_start integer Index of the start of the vowel cluster (1-based)
---- @field vowel_end integer Index of the end of the vowel cluster (1-based)
---- @field vowel_start_adjust integer Offset if the onset overlaps with the vowel cluster
---- @field vowel_seq string|nil Normalized vowel sequence (e.g. "ao", "iê", "uy")
+--- @field cursor_char_index integer Current cursor position (1-based). If the cursor is at the end of the word, it is `raw_len + 1`.
 --- @field analysis_status AnalysisStatus State of the word structure analysis
---- @field tone_mark Diacritic? The tone mark of the main vowel if it has one
---- @field tone_mark_idx integer The index of the tone mark in the word (1-based)
+--- @field vowel_start integer (after analysis) Index of the start of the vowel cluster (1-based)
+--- @field vowel_end integer (after analysis) Index of the end of the vowel cluster (1-based)
+--- @field vowel_start_adjust integer (after analysis) Offset if the onset overlaps with the vowel cluster
+--- @field vnorms table|nil (after analysis) --- Normalized vowel sequence layer, mapping indices to normalized vowels example: for word = { "d", "a", "o" } -- normalized_vowel_layer = { [1] = nil, [2] = "a", [3] = "o" }
+--- @field tone_mark Diacritic? (after analysis) The tone mark of the main vowel if it has one
+--- @field tone_mark_idx integer (after analysis) The index of the tone mark in the word (1-based)
 local _privates = setmetatable({}, { __mode = "k" }) --- @type table<WordEngine, PrivateWordEngineFields>
 
 local function filter_inserted_char(raw, raw_len, inserted_char_index)
@@ -101,12 +101,12 @@ function WordEngine:new(raw, cursor_char_index, insertion, raw_len)
 
 		analysis_status = AnalysisStatus.Unanalyzed, -- state of the word structure analysis
 
+		-- this fields only have the real value after analysis
 		tone_mark = nil, -- the tone mark of the main vowel if it has one
 		tone_mark_idx = -1, -- the index of the tone mark in the word (1-based)
 		vowel_start = -1,
 		vowel_end = -2, -- -2 to make sure that it is not valid when loop from start to end
-		vowel_seq = nil, -- the normalized vowel sequence
-
+		vnorms = nil,
 		vowel_start_adjust = 0, -- adjust the vowel start index if the onset overlaps with the vowel
 	}
 
@@ -219,41 +219,33 @@ function WordEngine:find_tone_mark_position(style, force_recheck)
 	self:analyze_structure()
 
 	local p = _privates[self]
+	assert(
+		p.analysis_status ~= AnalysisStatus.Unanalyzed,
+		"WordEngine:analyze_structure() must be called before find_tone_mark_position()"
+	)
+
 	if p.vowel_start < 0 then
 		return nil, -1
 	end
 
 	local word, vs, ve = p.word, p.vowel_start, p.vowel_end
-	local vlen = util.caculate_distance(vs, ve)
+	local tone_mark_idx = p.tone_mark_idx
 
 	-- only one vowel in the word
-	if vlen == SINGLE_VOWEL_LENGTH then
+	if vs == ve then
 		return word[vs], vs
+	elseif not force_recheck and tone_mark_idx > 0 then
+		return word[tone_mark_idx], tone_mark_idx
 	end
 
-	-- convert the vowel to level 2 and store in a new layer with the same index in word
-	-- example:
-	-- word = { "d" "a", "o"  }
-	-- -> normalized_vowel_layer = {
-	--   [2] = "a",
-	--   [3] = "o",
-	-- }
-	local normalized_vowel_layer = {}
-	-- Check if the word has a tone-marked vowel
-	for i = vs, ve do
-		local char = word[i]
-		if util.has_tone_marked(char) then
-			-- find a  tone marked and no need to recompute
-			if not force_recheck then
-				return char, i
-			end
-			normalized_vowel_layer[i] = util.level(char, 2)
-		end
-		normalized_vowel_layer[i] = char
+	local vnorms = p.vnorms
+	if not vnorms then
+		return nil, -1
 	end
+	-- local vlen = util.caculate_distance(vs, ve)
 
 	-- check if precomputed diphthongs or triphthongs
-	local v_seq = tbl_concat(normalized_vowel_layer, "", vs, ve)
+	local v_seq = tbl_concat(vnorms, "", vs, ve)
 	local precomputed = VOWEL_SEQS[v_seq]
 	if precomputed then
 		local mvi = vs + precomputed[1]
@@ -264,7 +256,7 @@ function WordEngine:find_tone_mark_position(style, force_recheck)
 	local mvi = -1
 	local min_priority = 100
 	for k = vs, ve do
-		local priority = VOWEL_PRIORITY[normalized_vowel_layer[k]]
+		local priority = VOWEL_PRIORITY[vnorms[k]]
 		if priority < min_priority then
 			min_priority = priority
 			mvi = k
@@ -280,7 +272,7 @@ end
 --- @param vowel_start integer The index of the first vowel (1-based)
 --- @param vowel_end integer The index of the last vowel (1-based)
 --- @return VowelSeqStatus The status of the vowel sequence
---- @return string|nil The normalized vowel sequence if it exists
+--- @return table|nil The normalized vowel sequence if it exists
 --- @return Diacritic|nil The tone mark if it exists
 --- @return integer The index of the tone mark in the vowel sequence (1-based), or -1 if no tone mark exists
 local function detect_vowel_seq_and_tone(chars, chars_size, vowel_start, vowel_end)
@@ -298,23 +290,23 @@ local function detect_vowel_seq_and_tone(chars, chars_size, vowel_start, vowel_e
 	--   [2] = "a",
 	--   [3] = "o",
 	-- }
-	local normalized_vowel_layer = {}
+	local vnorms = {}
 	local tone_mark_idx = -1
 	-- Check if the word has a tone-marked vowel
 	for i = vowel_start, vowel_end do
-		normalized_vowel_layer[i], tone_mark = util.strip_tone(chars[i])
+		vnorms[i], tone_mark = util.strip_tone(chars[i])
 		if tone_mark then
 			tone_mark_idx = i
 		end
 	end
-	local vowel_seq = tbl_concat(normalized_vowel_layer, "", vowel_start, vowel_end)
+	local vowel_seq = tbl_concat(vnorms, "", vowel_start, vowel_end)
 	local seq_map = VOWEL_SEQS[vowel_seq]
 	if seq_map == false then
 		status = VowelSeqStatus.Ambiguous
 	elseif seq_map == nil then
 		status = VowelSeqStatus.Invalid
 	end
-	return status, vowel_seq, tone_mark, tone_mark_idx
+	return status, vnorms, tone_mark, tone_mark_idx
 end
 
 --- Validate onset (consonant cluster) before the vowel
@@ -415,7 +407,7 @@ function WordEngine:analyze_structure(force)
 	end
 
 	local vowel_seq_status
-	vowel_seq_status, p.vowel_seq, p.tone_mark, p.tone_mark_idx = detect_vowel_seq_and_tone(word, len, vs, ve)
+	vowel_seq_status, p.vnorms, p.tone_mark, p.tone_mark_idx = detect_vowel_seq_and_tone(word, len, vs, ve)
 	if vowel_seq_status == VowelSeqStatus.Invalid then
 		p.analysis_status = AnalysisStatus.InvalidWord
 		return p.analysis_status
@@ -459,12 +451,15 @@ function WordEngine:remove_tone(method_config)
 		return false
 	end
 	p.word[tidx] = util.level(p.word[tidx], 2) -- remove the tone mark
+	p.tone_mark = nil
+	p.tone_mark_idx = -1
 	return true
 end
 
 --- Processes tone marks in the word
 function WordEngine:processes_tone(method_config)
 	local p = _privates[self]
+
 	local inserted_char_index = p.inserted_char_index
 
 	local main_vowel, tidx = self:find_tone_mark_position("")
@@ -482,10 +477,14 @@ function WordEngine:processes_tone(method_config)
 		p.word = util.copy_list(p.raw) -- make a copy of the word
 		p.word_len = p.raw_len
 		p.word[tidx] = vowel
+		p.tone_mark = nil
+		p.tone_mark_idx = -1
 	else
 		-- no tone mark found,
 		-- or the tone mark is different from the one we want to apply
 		p.word[tidx] = util.merge_tone_to_lv2_vowel(vowel, tone_diacritic)
+		p.tone_mark = tone_diacritic
+		p.tone_mark_idx = tidx
 	end
 	return true
 end
@@ -524,7 +523,7 @@ function WordEngine:processes_shape(method_config)
 				else -- is in vowel sequence
 					local status, new_vowel_seq = detect_vowel_seq_and_tone(word, word_len, p.vowel_start, p.vowel_end)
 					if status == VowelSeqStatus.Valid then
-						p.vowel_seq = new_vowel_seq
+						p.vnorms = new_vowel_seq
 						self:update_tone_mark_position(method_config)
 						return true
 					else
@@ -595,17 +594,18 @@ function WordEngine:is_valid_vietnamese_word()
 	return true
 end
 
---- Returns the column boundaries of the cursor position
---- @param cursor_col integer The current column position of the cursor
+--- Returns the cell boundaries of the cursor position
+--- @param cursor_cell_idx integer The current column position of the cursor
 --- @return integer start The start column boundary of the cursor position
 --- @return integer stop The end column boundary of the cursor position (exclusive)
-function WordEngine:column_boundaries(cursor_col)
+function WordEngine:cell_boundaries(cursor_cell_idx)
+	local strdisplaywidth = vim.fn.strdisplaywidth
 	local p = _privates[self]
 	local raw, csidx = p.raw, p.cursor_char_index
 
-	local start = cursor_col - vim.fn.strdisplaywidth(tbl_concat(raw, "", 1, csidx - 1))
-	local stop = csidx > p.raw_len and cursor_col
-		or cursor_col + vim.fn.strdisplaywidth(tbl_concat(raw, "", csidx, p.raw_len))
+	local start = cursor_cell_idx - strdisplaywidth(tbl_concat(raw, "", 1, csidx - 1))
+	local stop = csidx > p.raw_len and cursor_cell_idx
+		or cursor_cell_idx + strdisplaywidth(tbl_concat(raw, "", csidx, p.raw_len))
 
 	return start, stop
 end
@@ -614,7 +614,7 @@ end
 --- @param cursor_col_byteoffset integer The current byte offset of the cursor pos
 --- @return integer start The start byte offset boundary of the cursor position
 --- @return integer stop The end byte offset boundary of the cursor position (exclusive)
-function WordEngine:byteoffset_boundaries(cursor_col_byteoffset)
+function WordEngine:col_bounds(cursor_col_byteoffset)
 	local p = _privates[self]
 	local raw, csidx = p.raw, p.cursor_char_index
 
@@ -623,6 +623,23 @@ function WordEngine:byteoffset_boundaries(cursor_col_byteoffset)
 		or cursor_col_byteoffset + #tbl_concat(raw, "", csidx, p.raw_len)
 
 	return start, stop
+end
+
+--- Calculates the current cursor column based on the inserted character
+--- @param old_col integer The previous column position of the cursor_col_byteoffset
+--- @return integer The updated column position of the cursor_col_byteoffset
+function WordEngine:get_curr_cursor_col(old_col)
+	local p = _privates[self]
+	local raw_len, word_len = p.raw_len, p.word_len
+	local csidx = p.cursor_char_index
+	local start = old_col - #tbl_concat(p.raw, "", 1, csidx - 1)
+
+	if word_len == raw_len then
+		return start + #tbl_concat(p.word, "", 1, csidx - 1)
+	elseif word_len < raw_len then
+		return start + #tbl_concat(p.word, "", 1, p.inserted_char_index - 1)
+	end
+	return old_col
 end
 
 return WordEngine

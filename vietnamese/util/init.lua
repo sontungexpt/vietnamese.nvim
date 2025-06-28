@@ -472,13 +472,25 @@ end
 
 --- Get the byte offset of a column in a row of buffers
 --- @param bufnr number: Buffer number
---- @param row0based number: Line number (0-based)
---- @param col0based number: Column number (0-based)
---- @return number: Byte offset of the column in the line
+--- @param row0based integer: Line number (0-based)
+--- @param col0based integer  Column number (0-based)
+--- @return integer : Byte offset of the column in the line
 function M.col_to_byteoffset(bufnr, row0based, col0based)
+	-- api nvim_win_Get_cursor also return byteoffset
 	--- byteoffset is start from 0
 	local byteoffset = #(nvim_buf_get_text(bufnr, row0based, 0, row0based, col0based, {})[1] or "")
 	return byteoffset
+end
+
+--- Convert a column index to a cell index in a buffer
+--- @param bufnr number: Buffer number
+--- @param row0based integer: Row number (0-based)
+--- @param col0based integer: Column number (0-based)
+--- @return integer: Cell index of the column in the line
+function M.col_to_cell_idx(bufnr, row0based, col0based)
+	--- byteoffset is start from 0
+	local cell_idx = vim.fn.strdisplaywidth((nvim_buf_get_text(bufnr, row0based, 0, row0based, col0based, {})[1] or ""))
+	return cell_idx
 end
 
 --- Calculate the distance between two indicates

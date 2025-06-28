@@ -88,7 +88,7 @@ local function collect_left_chars(bufnr, row_0based, col_0based, inserting)
 	local text_chunk = nvim_buf_get_text(
 		bufnr,
 		row_0based,
-		math.max(0, col_0based - WORST_CASE_WORD_LEN),
+		col_0based - WORST_CASE_WORD_LEN > 0 and col_0based - WORST_CASE_WORD_LEN or 0,
 		row_0based,
 		col_0based,
 		{}
@@ -242,13 +242,15 @@ M.setup = function()
 			-- -- Save cursor position relative to word
 			-- local relative_pos = col - word_start
 
-			local bytoffset_start, byteoffset_end =
-				cursor_word:byteoffset_boundaries(util.col_to_byteoffset(args.buf, row_0based, col_0based))
+			local bytoffset_start, byteoffset_end = cursor_word:col_bounds(col_0based)
 
 			nvim_buf_set_text(0, row_0based, bytoffset_start, row_0based, byteoffset_end, { new_word })
 
-			-- -- Restore cursor position
-			nvim_win_set_cursor(0, { row, col_before_insert })
+			local new_col_0based = cursor_word:get_curr_cursor_col(col_0based)
+			if col_0based ~= new_col_0based then
+				-- -- Restore cursor position
+				nvim_win_set_cursor(0, { row, new_col_0based })
+			end
 
 			-- Notify the user about the processed word
 			inserted_char = "" -- Reset inserted character
