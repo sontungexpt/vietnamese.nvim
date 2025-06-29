@@ -6,7 +6,7 @@ local Diacritic = {
 	Acute = 1,
 	Grave = 2,
 	Hook = 3,
-	Tildle = 4,
+	Tilde = 4,
 	Dot = 5,
 	Circumflex = 6,
 	Breve = 7,
@@ -41,7 +41,7 @@ local DIACRITIC_FLAT = Diacritic.Flat
 local DIACRITIC_ACUTE = Diacritic.Acute
 local DIACRITIC_GRAVE = Diacritic.Grave
 local DIACRITIC_HOOK = Diacritic.Hook
-local DIACRITIC_TILDE = Diacritic.Tildle
+local DIACRITIC_TILDE = Diacritic.Tilde
 local DIACRITIC_DOT = Diacritic.Dot
 local DIACRITIC_CIRCUMFLEX = Diacritic.Circumflex
 local DIACRITIC_BREVE = Diacritic.Breve
@@ -133,11 +133,11 @@ M = {
 		["ỡ"] = { "o", "ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_TILDE, up = "Ỡ", lo = "ỡ" },
 		["ợ"] = { "o", "ơ", shape = DIACRITIC_HORN, tone = DIACRITIC_DOT, up = "Ợ", lo = "ợ" },
 
-		["ú"] = { "u", "u", tone = DIACRITIC_ACUTE, up = "Ú" },
-		["ù"] = { "u", "u", tone = DIACRITIC_GRAVE, up = "Ù" },
-		["ủ"] = { "u", "u", tone = DIACRITIC_HOOK, up = "Ủ" },
-		["ũ"] = { "u", "u", tone = DIACRITIC_TILDE, up = "Ũ" },
-		["ụ"] = { "u", "u", tone = DIACRITIC_DOT, up = "Ụ" },
+		["ú"] = { "u", "u", tone = DIACRITIC_ACUTE, up = "Ú", lo = "ú" },
+		["ù"] = { "u", "u", tone = DIACRITIC_GRAVE, up = "Ù", lo = "ù" },
+		["ủ"] = { "u", "u", tone = DIACRITIC_HOOK, up = "Ủ", lo = "ủ" },
+		["ũ"] = { "u", "u", tone = DIACRITIC_TILDE, up = "Ũ", lo = "ũ" },
+		["ụ"] = { "u", "u", tone = DIACRITIC_DOT, up = "Ụ", lo = "ụ" },
 
 		["ư"] = { "u", "ư", shape = DIACRITIC_HORN, up = "Ư", lo = "ư" },
 		["ứ"] = { "u", "ư", shape = DIACRITIC_HORN, tone = DIACRITIC_ACUTE, up = "Ứ", lo = "ứ" },
