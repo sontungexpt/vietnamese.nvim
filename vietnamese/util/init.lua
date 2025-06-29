@@ -265,11 +265,9 @@ end
 
 M.unique_tone_marked = function(chars, chars_size, i, j)
 	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
-	i = i and i > 0 and i or 1
-	j = j and j < chars_size and j or chars_size
 
 	local count = 0
-	for k = i, j do
+	for k = (i or 1), (j or chars_size) do
 		local c = chars[k]
 		if M.has_tone_marked(c) then
 			count = count + 1
@@ -364,6 +362,7 @@ end
 --- @return boolean True if the sequence is a potential vowel sequence, false otherwise
 function M.is_potiental_vowel_seq(chars, chars_size, min_seq_len, max_seq_len, strict)
 	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
+
 	local start, stop = M.find_vowel_seq_bounds(chars, chars_size)
 	local len = M.caculate_distance(start, stop)
 	if len < min_seq_len or len > max_seq_len then
@@ -394,7 +393,6 @@ end
 --- @param j integer The ending index (1-based)
 --- @return boolean True if all characters are vowels, false otherwise
 function M.all_vowels(chars, chars_size, strict, i, j)
-	assert(chars, "chars must not be nil")
 	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
 
 	for k = (i or 1), (j or chars_size) do
@@ -428,8 +426,6 @@ end
 --- @return boolean True if the repetition exceeds the maximum allowed, false otherwise
 function M.is_exceeded_vowel_repetition_time(chars, chars_size, i, j)
 	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
-	assert(j or 0 <= chars_size, "j must not be greater than chars_size")
-	assert(i <= j and i > 0, "i must not be greater than j, and i must be greater than 0")
 
 	local times = {}
 	for k = (i or 1), (j or chars_size) do
