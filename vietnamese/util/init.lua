@@ -428,7 +428,7 @@ end
 --- @return boolean True if the repetition exceeds the maximum allowed, false otherwise
 function M.is_exceeded_vowel_repetition_time(chars, chars_size, i, j)
 	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
-	assert(j <= chars_size, "j must not be greater than chars_size")
+	assert(j or 0 <= chars_size, "j must not be greater than chars_size")
 	assert(i <= j and i > 0, "i must not be greater than j, and i must be greater than 0")
 
 	local times = {}

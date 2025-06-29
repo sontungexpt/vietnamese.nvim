@@ -169,10 +169,16 @@ function WordEngine:inserted_char()
 end
 
 --- Copies the raw character list to the word character list
-function WordEngine:keep_raw()
+function WordEngine:restore_raw(update)
 	local p = _privates[self]
-	p.word = util.copy_list(p.raw) -- make a copy of the word
-	p.word_len = p.raw_len
+	local word, word_len, raw, raw_len = p.word, p.word_len, p.raw, p.raw_len
+	local stop = word_len > raw_len and word_len or raw_len
+
+	for i = 1, stop do
+		word[i] = update[i] or raw[i]
+	end
+	-- update new len
+	p.word_len = raw_len
 end
 
 --- Returns the cursor position in the character list (1-based)
@@ -495,34 +501,23 @@ function WordEngine:processes_tone(method_config)
 	return true
 end
 
-function WordEngine:processes_shape(method_config)
-	local p = _privates[self]
-
-	assert(
-		p.analysis_status ~= AnalysisStatus.Unanalyzed,
-		"WordEngine:analyze_structure() must be called before processes_shape()"
-	)
-
-	local word, word_len, inserted_char_index = p.word, p.word_len, p.inserted_char_index
-	local vs, ve = p.vowel_start, p.vowel_end
-	local key = p.raw[inserted_char_index]
-
-	--
+local function collect_effects(chars, vs, ve, key, method_config)
 	local effects = {}
 	local ecount = 0
-	local shape_diacritic_d = util.is_d(word[1]) and method_config_util.get_shape_diacritic(key, word[1], method_config)
+	local shape_diacritic_d = util.is_d(chars[1])
+		and method_config_util.get_shape_diacritic(key, chars[1], method_config)
 	if shape_diacritic_d then
-		ecount = ecount + 1
+		ecount = 1
 		effects[ecount] = {
 			[1] = 1, -- index of the character in the word
-			[2] = word[1], -- character itself
+			[2] = chars[1], -- character itself
 			[3] = shape_diacritic_d, -- diacritic to apply
-			[4] = util.has_shape(word[1]), -- if the character already has a shape diacritic
+			[4] = util.has_shape(chars[1]), -- if the character already has a shape diacritic
 		}
 	else
 		-- to make sure that in the "qu" or "gi" case "u" and "i" is consider ass a consonant
 		for i = vs, ve do
-			local c = word[i]
+			local c = chars[i]
 			local shape_diacritic = method_config_util.get_shape_diacritic(key, c, method_config)
 			if shape_diacritic then
 				ecount = ecount + 1
@@ -535,41 +530,67 @@ function WordEngine:processes_shape(method_config)
 			end
 		end
 	end
+	return effects, ecount
+end
+
+function WordEngine:processes_shape(method_config)
+	local p = _privates[self]
+
+	assert(
+		p.analysis_status ~= AnalysisStatus.Unanalyzed,
+		"WordEngine:analyze_structure() must be called before processes_shape()"
+	)
+
+	local word, word_len, inserted_char_index = p.word, p.word_len, p.inserted_char_index
+	local vs, ve = p.vowel_start, p.vowel_end
+	local key = p.raw[inserted_char_index]
+
+	local effects, ecount = collect_effects(word, vs, ve, key, method_config)
+
 	if ecount == 0 then
 		return false -- no shape diacritic found
 	elseif ecount > 1 then
 		local effect1 = effects[1]
 		local effect2 = effects[2]
 
-		local is_uo_horn = effect1[3] == Diacritic.Horn
-			and effect2[3] == Diacritic.Horn
-			and util.level(effect1[2], 1) == "u"
-			and util.level(effect2[2], 1) == "o"
-			and effect2[1] - effect1[1] == 1
+		local effect1_idx = effect1[1]
+		local effect2_idx = effect2[1]
 
-		if is_uo_horn then
-			if effect2[1] >= inserted_char_index then
+		local effect1_c = effect1[2]
+		local effect2_c = effect2[2]
+
+		local effect1_shape = effect1[3]
+		local effect2_shape = effect2[3]
+
+		local is_dual_horn_uo = effect1_shape == Diacritic.Horn
+			and effect2_shape == Diacritic.Horn
+			and util.level(effect1_c, 1) == "u"
+			and util.level(effect2_c, 1) == "o"
+			and effect2_idx < word_len -- must have the coda
+			and effect2_idx - effect1_idx == 1
+
+		if is_dual_horn_uo then
+			if effect2_idx >= inserted_char_index then
 				return false
 			elseif effect1[4] and effect2[4] then
 				-- restore the horn
-				p.word = util.copy_list(p.raw) -- make a copy of the word
-				p.word_len = p.raw_len
-				p.word[effect1[1]], _ = util.strip_shape(effect1[2])
-				p.word[effect2[1]], _ = util.strip_shape(effect2[2])
+				self:restore_raw({
+					[effect1_idx] = util.strip_shape(effect1_c),
+					[effect2_idx] = util.strip_shape(effect2_c),
+				})
 				return true
 			end
-			p.word[effect1[1]] = util.merge_diacritic(effect1[2], effect1[3])
-			p.word[effect2[1]] = util.merge_diacritic(effect2[2], effect2[3])
+			word[effect1_idx] = util.merge_diacritic(effect1_c, effect1_shape)
+			word[effect2_idx] = util.merge_diacritic(effect2_c, effect2_shape)
 
-			local status, new_vnorms = detect_vowel_seq_and_tone(word, word_len, p.vowel_start, p.vowel_end)
+			local status, new_vnorms = detect_vowel_seq_and_tone(word, word_len, vs, ve)
+
 			if status == VowelSeqStatus.Valid then
 				p.vnorms = new_vnorms
 				self:update_tone_mark_position(method_config)
 				return true
 			end
-			-- can not apply the shape diacritic
-			p.word = util.copy_list(p.raw) -- make a copy of the word
-			p.word_len = p.raw_len
+			self:restore_raw({})
 			p.analysis_status = AnalysisStatus.MustAnalyze
 			return false
 		end
@@ -594,9 +615,10 @@ function WordEngine:processes_shape(method_config)
 
 		if effect[4] then
 			-- restore shape diacritic
-			p.word = util.copy_list(p.raw) -- make a copy of the word
-			p.word_len = p.raw_len
-			p.word[effect_idx] = util.strip_shape(effect[2])
+			self:restore_raw({
+				[effect_idx] = util.strip_shape(effect[2]),
+			})
+
 			return true
 		end
 		word[effect_idx] = util.merge_diacritic(effect[2], effect[3])
@@ -613,8 +635,7 @@ function WordEngine:processes_shape(method_config)
 			return true
 		elseif i == ecount then
 			-- can not apply the shape diacritic
-			p.word = util.copy_list(p.raw) -- make a copy of the word
-			p.word_len = p.raw_len
+			self:restore_raw({})
 			p.analysis_status = AnalysisStatus.MustAnalyze
 			return false
 		end
