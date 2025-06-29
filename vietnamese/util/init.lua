@@ -166,7 +166,7 @@ end
 --- @param level 1|2 The level to check (1 or 2)
 --- @return string The character at the specified level, or the original character if not found
 M.level = function(c, level)
-	assert(c, "c must not be nil")
+	assert(c ~= nil, "c must not be nil")
 	return UTF8_VNCHAR_COMPONENT[c] and UTF8_VNCHAR_COMPONENT[c][level] or c
 end
 

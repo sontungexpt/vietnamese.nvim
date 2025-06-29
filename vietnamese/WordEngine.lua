@@ -6,7 +6,6 @@ local ONSETS = CONSTANT.ONSETS
 local CODAS = CONSTANT.CODAS
 local VOWEL_SEQS = CONSTANT.VOWEL_SEQS
 local Diacritic = CONSTANT.Diacritic
-local UTF8_VN_CHAR_DICT = CONSTANT.UTF8_VNCHAR_COMPONENT
 local VOWEL_PRIORITY = CONSTANT.VOWEL_PRIORITY
 
 local SINGLE_VOWEL_LENGTH = 1
@@ -104,7 +103,7 @@ function WordEngine:new(raw, cursor_char_index, insertion, raw_len)
 		analysis_status = AnalysisStatus.Unanalyzed, -- state of the word structure analysis
 
 		-- this fields only have the real value after analysis
-		tone_mark = Diacritic.Flat, -- the tone mark of the main vowel if it has one
+		tone_mark = nil, -- the tone mark of the main vowel if it has one
 		tone_mark_idx = -1, -- the index of the tone mark in the word (1-based)
 		vowel_start = -1,
 		vowel_end = -2, -- -2 to make sure that it is not valid when loop from start to end
@@ -197,9 +196,10 @@ end
 --- @return boolean true if the tone mark position was updated, false otherwise
 function WordEngine:update_tone_mark_position(method_config)
 	local p = _privates[self]
-	local chars, tone, tidx = p.word, p.tone_mark, p.tone_mark_idx
+	local tone, tidx = p.tone_mark, p.tone_mark_idx
 
-	if not tone then
+	-- no tone
+	if tidx < 1 then
 		return false
 	end
 
@@ -208,7 +208,7 @@ function WordEngine:update_tone_mark_position(method_config)
 		return false
 	end
 
-	p.word[tidx] = util.level(chars[tidx], 2)
+	p.word[tidx] = util.level(p.word[tidx], 2)
 	p.word[new_idx] = util.merge_tone_to_lv2_vowel(vowel, tone)
 	p.tone_mark = tone
 	p.tone_mark_idx = new_idx
@@ -456,13 +456,12 @@ end
 --- @return boolean True if the tone mark was removed, false otherwise
 function WordEngine:remove_tone(method_config)
 	local p = _privates[self]
-	local tone, tidx = p.tone_mark, p.tone_mark_idx
+	local word, tone, tidx = p.word, p.tone_mark, p.tone_mark_idx
 	if not tone then
-		p.word = util.copy_list(p.raw) -- make a copy of the word
-		p.word_len = p.raw_len
+		self:restore_raw({})
 		return false
 	end
-	p.word[tidx] = util.level(p.word[tidx], 2) -- remove the tone mark
+	word[tidx] = util.level(word[tidx], 2) -- remove the tone mark
 	p.tone_mark = nil
 	p.tone_mark_idx = -1
 	return true
@@ -486,9 +485,9 @@ function WordEngine:processes_tone(method_config)
 	if not tone_diacritic then
 		return false
 	elseif removed_tone == tone_diacritic then
-		p.word = util.copy_list(p.raw) -- make a copy of the word
-		p.word_len = p.raw_len
-		p.word[tidx] = vowel
+		self:restore_raw({
+			[tidx] = vowel,
+		})
 		p.tone_mark = nil
 		p.tone_mark_idx = -1
 	else
@@ -503,31 +502,32 @@ end
 
 local function collect_effects(chars, vs, ve, key, method_config)
 	local effects = {}
-	local ecount = 0
-	local shape_diacritic_d = util.is_d(chars[1])
-		and method_config_util.get_shape_diacritic(key, chars[1], method_config)
+
+	local char1 = chars[1]
+	local shape_diacritic_d = util.is_d(char1) and method_config_util.get_shape_diacritic(key, char1, method_config)
 	if shape_diacritic_d then
-		ecount = 1
-		effects[ecount] = {
+		effects[1] = {
 			[1] = 1, -- index of the character in the word
-			[2] = chars[1], -- character itself
+			[2] = char1, -- character itself
 			[3] = shape_diacritic_d, -- diacritic to apply
-			[4] = util.has_shape(chars[1]), -- if the character already has a shape diacritic
+			[4] = util.has_shape(char1), -- if the character already has a shape diacritic
 		}
-	else
-		-- to make sure that in the "qu" or "gi" case "u" and "i" is consider ass a consonant
-		for i = vs, ve do
-			local c = chars[i]
-			local shape_diacritic = method_config_util.get_shape_diacritic(key, c, method_config)
-			if shape_diacritic then
-				ecount = ecount + 1
-				effects[ecount] = {
-					[1] = i,
-					[2] = c,
-					[3] = shape_diacritic,
-					[4] = util.has_shape(c),
-				}
-			end
+		return effects, 1
+	end
+
+	local ecount = 0
+	-- to make sure that in the "qu" or "gi" case "u" and "i" is consider ass a consonant
+	for i = vs, ve do
+		local c = chars[i]
+		local shape_diacritic = method_config_util.get_shape_diacritic(key, c, method_config)
+		if shape_diacritic then
+			ecount = ecount + 1
+			effects[ecount] = {
+				[1] = i,
+				[2] = c,
+				[3] = shape_diacritic,
+				[4] = util.has_shape(c),
+			}
 		end
 	end
 	return effects, ecount
@@ -550,38 +550,32 @@ function WordEngine:processes_shape(method_config)
 	if ecount == 0 then
 		return false -- no shape diacritic found
 	elseif ecount > 1 then
-		local effect1 = effects[1]
-		local effect2 = effects[2]
+		local e1, e2 = effects[1], effects[2]
+		local e1_idx, e2_idx = e1[1], e2[1]
+		local e1_c, e2_c = e1[2], e2[2]
+		local e1_shape, e2_shape = e1[3], e2[3]
 
-		local effect1_idx = effect1[1]
-		local effect2_idx = effect2[1]
-
-		local effect1_c = effect1[2]
-		local effect2_c = effect2[2]
-
-		local effect1_shape = effect1[3]
-		local effect2_shape = effect2[3]
-
-		local is_dual_horn_uo = effect1_shape == Diacritic.Horn
-			and effect2_shape == Diacritic.Horn
-			and util.level(effect1_c, 1) == "u"
-			and util.level(effect2_c, 1) == "o"
-			and effect2_idx < word_len -- must have the coda
-			and effect2_idx - effect1_idx == 1
+		local is_dual_horn_uo = e1_shape == Diacritic.Horn
+			and e2_shape == Diacritic.Horn
+			and util.level(e1_c, 1) == "u"
+			and util.level(e2_c, 1) == "o"
+			and e2_idx < word_len -- must have the coda
+			and e2_idx - e1_idx == 1
 
 		if is_dual_horn_uo then
-			if effect2_idx >= inserted_char_index then
+			if e2_idx >= inserted_char_index then
 				return false
-			elseif effect1[4] and effect2[4] then
+			elseif e1[4] and e2[4] then
 				-- restore the horn
 				self:restore_raw({
-					[effect1_idx] = util.strip_shape(effect1_c),
-					[effect2_idx] = util.strip_shape(effect2_c),
+					[e1_idx] = util.strip_shape(e1_c),
+					[e2_idx] = util.strip_shape(e2_c),
 				})
 				return true
 			end
-			word[effect1_idx] = util.merge_diacritic(effect1_c, effect1_shape)
-			word[effect2_idx] = util.merge_diacritic(effect2_c, effect2_shape)
+
+			word[e1_idx] = util.merge_diacritic(e1_c, e1_shape)
+			word[e2_idx] = util.merge_diacritic(e2_c, e2_shape)
 
 			local status, new_vnorms = detect_vowel_seq_and_tone(word, word_len, vs, ve)
 
@@ -607,28 +601,30 @@ function WordEngine:processes_shape(method_config)
 	end
 
 	for i = 1, ecount do
-		local effect = effects[i]
-		local effect_idx = effect[1]
-		if effect_idx >= inserted_char_index then
+		local e = effects[i]
+		local e_idx, e_c = e[1],e[2]
+		if e_idx >= inserted_char_index then
 			goto continue
 		end
 
-		if effect[4] then
+		if e[4] then
 			-- restore shape diacritic
 			self:restore_raw({
-				[effect_idx] = util.strip_shape(effect[2]),
+				[e_idx] = util.strip_shape(e_c),
 			})
 
 			return true
 		end
-		word[effect_idx] = util.merge_diacritic(effect[2], effect[3])
 		-- not in vowel sequence means a consonant
 		-- d
-		if effect_idx < vs or effect_idx > ve then
+		if e_idx < vs or e_idx > ve then
+			word[e_idx] = util.merge_diacritic(e_c, e[3])
 			return true
 		end
+
 		-- in vowel sequence
-		local status, new_vnorms = detect_vowel_seq_and_tone(word, word_len, p.vowel_start, p.vowel_end)
+		word[e_idx] = util.merge_diacritic(e_c, e[3])
+		local status, new_vnorms = detect_vowel_seq_and_tone(word, word_len, vs, ve)
 		if status == VowelSeqStatus.Valid then
 			p.vnorms = new_vnorms
 			self:update_tone_mark_position(method_config)
@@ -639,6 +635,8 @@ function WordEngine:processes_shape(method_config)
 			p.analysis_status = AnalysisStatus.MustAnalyze
 			return false
 		end
+    -- restore the before state
+    word[e_idx] = e_c
 		::continue::
 	end
 

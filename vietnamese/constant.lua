@@ -31,6 +31,11 @@ local Diacritic = {
 	is_shape = function(diacritic)
 		return diacritic > 5
 	end,
+
+	--- Check if no tone
+	is_no_tone = function(diacritic)
+		return diacritic == nil or diacritic == 0
+	end,
 }
 local DIACRITIC_FLAT = Diacritic.Flat
 local DIACRITIC_ACUTE = Diacritic.Acute
@@ -275,78 +280,78 @@ M = {
 	--- @type table<string, {[0]: number?}|boolean>
 	VOWEL_SEQS = {
 		-- a
-		["ai"] = { -1 },
-		["ao"] = { -1 },
-		["au"] = { -1 },
-		["âu"] = { -1 },
-		["ay"] = { -1 },
-		["ây"] = { -1 },
+		["ai"] = { 0 },
+		["ao"] = { 0 },
+		["au"] = { 0 },
+		["âu"] = { 0 },
+		["ay"] = { 0 },
+		["ây"] = { 0 },
 
-		["ia"] = { -1 },
+		["ia"] = { 0 },
 		["ie"] = false, --transitional, not a valid vowel
-		["iê"] = { 0 },
-		["iu"] = { -1 },
-		["iêu"] = { 0 },
+		["iê"] = { 1 },
+		["iu"] = { 0 },
+		["iêu"] = { 1 },
 
 		["ye"] = false, -- transitional, not a valid vowel
-		["yê"] = { 0 },
-		["yêu"] = { 0 },
+		["yê"] = { 1 },
+		["yêu"] = { 1 },
 
-		["eo"] = { -1 },
+		["eo"] = { 0 },
 
 		["eu"] = false, -- transitional, not a valid vowel
-		["êu"] = { -1 },
+		["êu"] = { 0 },
 
-		["oa"] = { 0 },
-		["oă"] = { 0 },
-		["oay"] = { 0 },
-		["oai"] = { 0 },
-		["oau"] = { 0 },
-		["oao"] = { 0 },
-		["oo"] = { -1 },
-		["oi"] = { -1 },
-		["ôi"] = { -1 },
-		["ơi"] = { -1 },
-		["oe"] = { -1 },
-		["oeo"] = { 0 },
+		["oa"] = { 1 },
+		["oă"] = { 1 },
+		["oay"] = { 1 },
+		["oai"] = { 1 },
+		["oau"] = { 1 },
+		["oao"] = { 1 },
+		["oo"] = false,
+		["oi"] = { 0 },
+		["ôi"] = { 0 },
+		["ơi"] = { 0 },
+		["oe"] = { 1 },
+		["oeo"] = { 1 },
 
-		["ua"] = { -1 },
-		["uao"] = { 0 },
-		["ưa"] = { -1 },
-		["uă"] = { 0 },
-		["uâ"] = { 0 },
-		["uây"] = { 0 },
-		["ue"] = { 0 },
-		["uê"] = { 0 },
-		["ui"] = { -1 },
-		["ưi"] = { -1 },
-		["uy"] = { -1 },
-		["uyu"] = { 0 },
-		["uya"] = { 0 },
+		["ua"] = { 0 },
+		["uao"] = { 1 },
+		["ưa"] = { 0 },
+		["uă"] = { 1 },
+		["uâ"] = { 1 },
+		["uây"] = { 1 },
+		["ue"] = false,
+		["uê"] = { 1 },
+		["ui"] = { 0 },
+		["ưi"] = { 0 },
+		["uy"] = { 1 },
+		["uyu"] = { 1 },
+		["uya"] = { 1 },
 
 		["uye"] = false, -- transitional, not a valid vowel
-		["uyê"] = { 1 },
+		["uyê"] = { 2 },
 
 		["uu"] = false, -- transitional, not a valid vowel
 		["ưu"] = { 0 },
 
 		["uo"] = false, -- transitional, not a valid vowel
-		["uô"] = { 0 },
-		["uôi"] = { 0 },
+		["uô"] = { 1 },
+		["uôi"] = { 1 },
 
 		["ưo"] = false, -- transitional, not a valid vowel
-		["uơ"] = { 0 },
-		["ươ"] = { 0 },
+		["uơ"] = { 1 },
+		["ươ"] = { 1 },
 
 		["uoi"] = false, -- transitional, not a valid vowel
 		["uơi"] = false, -- transitional, not a valid vowel
 		["ưoi"] = false, -- transitional, not a valid vowel
-		["ươi"] = { 0 },
+		["ươi"] = { 1 },
 
 		["uou"] = false, -- transitional, not a valid vowel
 		["uơu"] = false, -- transitional, not a valid vowel
 		["ưou"] = false, -- transitional, not a valid vowel
-		["ươu"] = { 0 },
+		["ươu"] = { 1 },
 	},
 	ONSETS = {
 		["b"] = true,
