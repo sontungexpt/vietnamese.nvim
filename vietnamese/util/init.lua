@@ -86,7 +86,7 @@ end
 --- Convert a string to lowercase
 --- @param word string The string to Convert
 --- @return string The lowercase version of the starting
-function M.lower(word)
+local function lower(word)
 	local chars = {}
 	for i, char in M.iter_chars(word) do
 		local comp = UTF8_VNCHAR_COMPONENT[char]
@@ -95,6 +95,7 @@ function M.lower(word)
 
 	return tbl_concat(chars)
 end
+M.lower = lower
 
 --- Check if a character is uppercase
 --- @param c string The character to checks
@@ -132,15 +133,25 @@ function M.is_upper(c)
 	return comp.up ~= nil
 end
 
+--- Get the level of a Vietnamese character
+--- @param c string The character to check
+--- @param level 1|2 The level to check (1 or 2)
+--- @return string The character at the specified level, or the original character if not found
+local level = function(c, level)
+	assert(c ~= nil, "c must not be nil")
+	return UTF8_VNCHAR_COMPONENT[c] and UTF8_VNCHAR_COMPONENT[c][level] or c
+end
+M.level = level
+
 --- Check if a character is a Vietnamese vowel
 --- @param c string The character to check
 --- @param strict boolean|nil If true, checks for strict Vietnamese vowels (no accept tone char like "á", "à", etc.)
---- @return boolean True if the character is a Vietnamese vowel, false otherwise
-function M.is_vietnamese_vowel(c, strict)
-	assert(c, "c must not be nil")
-	c = strict and M.lower(c) or M.level(M.lower(c), 2)
+--- @return boolean is_vowel True if the character is a Vietnamese vowel, false otherwise
+local function is_vietnamese_vowel(c, strict)
+	c = strict and lower(c) or level(lower(c), 2)
 	return BASE_VOWEL_PRIORITY[c] ~= nil
 end
+M.is_vietnamese_vowel = is_vietnamese_vowel
 
 --- Check if a character is a level 1 Vietnamese vowel
 --- @param c string The character to checks
@@ -161,15 +172,6 @@ function M.is_vietnamese_char(char)
 	return char:match("^%a$") ~= nil
 end
 
---- Get the level of a Vietnamese character
---- @param c string The character to check
---- @param level 1|2 The level to check (1 or 2)
---- @return string The character at the specified level, or the original character if not found
-M.level = function(c, level)
-	assert(c ~= nil, "c must not be nil")
-	return UTF8_VNCHAR_COMPONENT[c] and UTF8_VNCHAR_COMPONENT[c][level] or c
-end
-
 --- Check if a character has a tone
 --- @param c string The character to check
 --- @return boolean True if the character has a tone, false otherwise
@@ -184,8 +186,11 @@ M.has_shape = function(c)
 	return UTF8_VNCHAR_COMPONENT[c] ~= nil and UTF8_VNCHAR_COMPONENT[c].shape ~= nil
 end
 
+--- Strip the shape from a Vietnamese character
+--- @param c string The character to strip the shape from
+--- @return string lv1_c The character without the shape (level 1 character), or the original character if no shape was find_vowel_seq_bounds
+--- @return Diacritic|nil stripped_shape The shape of the character if it exists, or nil if notify
 M.strip_shape = function(c)
-	assert(c, "c must not be nil")
 	local dict = UTF8_VNCHAR_COMPONENT[c]
 	if not dict or not dict.shape then
 		return c, nil
@@ -206,8 +211,6 @@ end
 --- @return string The character with the attached tone, or the original character if no tone was found
 --- @return boolean True if the tone was successfully attached, false otherwise
 M.merge_tone_to_lv2_vowel = function(lv2_c, tone)
-	assert(lv2_c ~= nil, "c must not be nil")
-	assert(tone ~= nil, "tone must not be nil")
 	local tone_map = DIACRITIC_MAP[lv2_c]
 
 	if not tone_map then
@@ -225,8 +228,6 @@ end
 --- @return string The character with the merged diacritic, or the original character if no merge was possible
 --- @return Diacritic|nil The original diacritic if it was replaced, or nil if no replace was possible
 M.merge_diacritic = function(c, diacritic, force)
-	assert(c ~= nil, "c must not be nil")
-	assert(diacritic ~= nil, "diacritic must not be nil")
 	if Diacritic.is_flat(diacritic) then
 		return M.strip_tone(c)
 	end
@@ -263,9 +264,13 @@ M.merge_diacritic = function(c, diacritic, force)
 	return shaped, shape
 end
 
+--- Check if a character is unique tone marked in a range of characters
+--- @param chars table The character Table
+--- @param chars_size integer The size of the character Table
+--- @param i integer|nil The starting index (1-based)
+--- @param j integer|nil The ending index (1-based)
+--- @return boolean unique True if there is at most one tone marked character in the range, false otherwise
 M.unique_tone_marked = function(chars, chars_size, i, j)
-	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
-
 	local count = 0
 	for k = (i or 1), (j or chars_size) do
 		local c = chars[k]
@@ -321,7 +326,7 @@ function M.find_vowel_seq_bounds(chars, chars_size)
 
 	-- Find the first and last vowel in the character table
 	for i = 1, chars_size do
-		if M.is_vietnamese_vowel(chars[i]) then
+		if is_vietnamese_vowel(chars[i]) then
 			first = i
 			break
 		end
@@ -332,7 +337,7 @@ function M.find_vowel_seq_bounds(chars, chars_size)
 	end
 
 	for i = chars_size, 1, -1 do
-		if M.is_vietnamese_vowel(chars[i]) then
+		if is_vietnamese_vowel(chars[i]) then
 			last = i
 			break
 		end
@@ -345,7 +350,7 @@ end
 --- @param c string The character to get the conflict vowel code for
 --- @return string The conflict vowel code, which is "a" if the character is "e" or "a", otherwise the character itself
 function M.get_conflict_vowel_code(c)
-	local lv1 = M.lower(M.level(c, 1))
+	local lv1 = lower(level(c, 1))
 	if lv1 == "a" or lv1 == "e" then
 		-- a never combine with e, so return a
 		return "a"
@@ -361,7 +366,7 @@ end
 --- @param strict boolean|nil If true, checks for strict Vietnamese vowels (no accept tone char like "á", "à", etc.)
 --- @return boolean True if the sequence is a potential vowel sequence, false otherwise
 function M.is_potiental_vowel_seq(chars, chars_size, min_seq_len, max_seq_len, strict)
-	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
+	-- assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
 
 	local start, stop = M.find_vowel_seq_bounds(chars, chars_size)
 	local len = M.caculate_distance(start, stop)
@@ -379,7 +384,7 @@ end
 function M.some_vowels(chars, chars_size, strict)
 	for i = 1, chars_size do
 		local c = chars[i]
-		if M.is_vietnamese_vowel(c, strict) then
+		if is_vietnamese_vowel(c, strict) then
 			return true
 		end
 	end
@@ -396,7 +401,7 @@ function M.all_vowels(chars, chars_size, strict, i, j)
 	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
 
 	for k = (i or 1), (j or chars_size) do
-		if not M.is_vietnamese_vowel(chars[k], strict) then
+		if not is_vietnamese_vowel(chars[k], strict) then
 			return false
 		end
 	end
@@ -408,14 +413,21 @@ function M.get_max_repetition_time(char)
 		return char, 0
 	end
 
-	local lv1_c = M.lower(M.level(char, 1))
-	if lv1_c == "o" or lv1_c == "u" then
+	local lv1_c = lower(level(char, 1))
+	if
+		lv1_c == "o"
+		or lv1_c == "u"
+		or lv1_c == "c"
+		or lv1_c == "n"
+		or lv1_c == "m"
+		or lv1_c == "g"
+		or lv1_c == "h"
+		or lv1_c == "p"
+		or lv1_c == "t"
+	then
 		return lv1_c, 2
-	elseif lv1_c == "i" or lv1_c == "e" or lv1_c == "a" or lv1_c == "y" then
-		return lv1_c, 1
 	end
-	-- consonant
-	return lv1_c, 2
+	return lv1_c, 1
 end
 
 --- Check if the repetition of vowels in a character sequence exceeds the maximum allowed repetition 13:44
@@ -502,6 +514,18 @@ end
 --- @return boolean: True if the character is "d" or "đ" or "D" or "Đ", false otherwise
 function M.is_d(c)
 	return c == "d" or c == "D" or c == "đ" or c == "Đ"
+end
+
+function M.benchmark(func, ...)
+	local start_time = vim.uv.hrtime()
+	local result = { func(...) }
+	local end_time = vim.uv.hrtime()
+	local elapsed_time = (end_time - start_time) / 1e6 -- Convert to milliseconds
+	vim.notify(string.format("Benchmark: %s took %.2f ms", func, elapsed_time), vim.log.levels.INFO, {
+		title = "Vietnamese Utils Benchmark",
+	})
+	local unpack = table.unpack or unpack
+	return unpack(result)
 end
 
 return M

@@ -8,3 +8,12 @@ nvim_create_user_command("VietnameseToggle", function()
 		require("vietnamese.notifier").info("Vietnamese disabled")
 	end
 end, {})
+
+nvim_create_user_command("VietnameseMethod", function(args)
+	require("vietnamese.config").set_input_method(args.args)
+end, {
+	nargs = 1,
+	complete = function()
+		return require("vietnamese.config").get_support_methods()
+	end,
+})

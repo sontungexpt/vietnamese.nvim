@@ -1,19 +1,16 @@
 local tbl_concat = table.concat
 
 local CONSTANT = require("vietnamese.constant")
-
-local ONSETS = CONSTANT.ONSETS
-local CODAS = CONSTANT.CODAS
-local VOWEL_SEQS = CONSTANT.VOWEL_SEQS
+local ONSETS, CODAS, VOWEL_SEQS, VOWEL_PRIORITY =
+	CONSTANT.ONSETS, CONSTANT.CODAS, CONSTANT.VOWEL_SEQS, CONSTANT.VOWEL_PRIORITY
 local Diacritic = CONSTANT.Diacritic
-local VOWEL_PRIORITY = CONSTANT.VOWEL_PRIORITY
 
 local SINGLE_VOWEL_LENGTH = 1
 local DIPTHONGS_LENGTH = 2
 local TRIPTHONGS_LENGTH = 3
 
-local MAX_CODA_CLUSTERS_LENGTH = 2
-local MAX_CONSONANT_CLUSTERS_LENGTH = 3
+local MAX_CODA_LENGTH = 2
+local MAX_ONSET_LENGTH = 3
 
 local util = require("vietnamese.util")
 local method_config_util = require("vietnamese.util.method-config")
@@ -60,45 +57,43 @@ WordEngine.__index = WordEngine
 --- @field tone_mark_idx integer (after analysis) The index of the tone mark in the word (1-based)
 local _privates = setmetatable({}, { __mode = "k" }) --- @type table<WordEngine, PrivateWordEngineFields>
 
-local function filter_inserted_char(raw, raw_len, inserted_char_index)
-	local filtered = {}
-	for i = 1, inserted_char_index - 1 do
-		filtered[i] = raw[i]
+local function clone_and_insert(chars, chars_size, inserted_char, inserted_idx)
+	local new_chars = {}
+	local new_size = chars_size + 1
+
+	for i = 1, inserted_idx - 1 do
+		new_chars[i] = chars[i]
 	end
-	for i = inserted_char_index + 1, raw_len do
-		filtered[i - 1] = raw[i]
+	new_chars[inserted_idx] = inserted_char
+	for i = inserted_idx + 1, new_size do
+		new_chars[i] = chars[i - 1]
 	end
-	return filtered, raw_len - 1
+
+	return new_chars, new_size
 end
 
 --- Cr-eates a new CursorWord instance
---- @param raw table a table of characters representing the word
---- @param cursor_char_index integer the index of the cursor position in the character list (1-based)
---- @param insertion boolean whether the cursor is in insertion mode (optional, defaults to false)
---- @param raw_len integer the total number of characters in the word (optional, defaults to length of char_list)
+--- @param cword table a table of characters representing the word
+--- @param cwlen integer the length of the word
+--- @param inserted_char string the character at the cursor position
+--- @param inserted_idx integer the index of the cursor character (1-based)
 --- @return WordEngine  instance
-function WordEngine:new(raw, cursor_char_index, insertion, raw_len)
+function WordEngine:new(cword, cwlen, inserted_char, inserted_idx)
 	local obj = setmetatable({}, self)
 
-	raw_len = raw_len or #raw
-
-	local word, word_len, inserted_char_index = raw, raw_len, nil
-	if insertion then
-		inserted_char_index = cursor_char_index - 1
-		word, word_len = filter_inserted_char(raw, raw_len, inserted_char_index)
-	end
+	local raw, raw_len = clone_and_insert(cword, cwlen, inserted_char, inserted_idx)
 
 	_privates[obj] = {
-		word = word,
-		word_len = word_len,
+		word = cword,
+		word_len = cwlen,
 		raw = raw,
 		raw_len = raw_len,
 
-		inserted_char_index = inserted_char_index,
+		inserted_char_index = inserted_idx,
 
 		-- cursor_char_index == raw_len + 1
 		-- if the cursor is at the end of the word
-		cursor_char_index = cursor_char_index,
+		cursor_char_index = inserted_idx + 1,
 
 		analysis_status = AnalysisStatus.Unanalyzed, -- state of the word structure analysis
 
@@ -145,8 +140,8 @@ end
 --- @param method_config table|nil the method configuration to use for checking
 --- @return boolean true if the diacritic can be applied, false otherwise
 function WordEngine:is_potential_diacritic_key(key, method_config)
-	assert(key ~= nil, "diacritic_key must not be nil")
-	assert(type(method_config) == "table", "method_config must not be nil")
+	-- assert(key ~= nil, "diacritic_key must not be nil")
+	-- assert(type(method_config) == "table", "method_config must not be nil")
 
 	local p = _privates[self]
 	local raw = p.raw
@@ -191,10 +186,20 @@ function WordEngine:get(use_raw)
 	return use_raw and p.raw or p.word
 end
 
+function WordEngine:feedkey()
+	local p = _privates[self]
+	self:restore_raw({})
+
+	p.analysis_status = AnalysisStatus.MustAnalyze
+end
+
 ----- Updates the position of the tone mark in the word
 --- @param method_config table|nil The method configuration to use for updating the tone mark position
---- @return boolean true if the tone mark position was updated, false otherwise
+--- @return boolean changed true if the tone mark position was updated, false otherwise
 function WordEngine:update_tone_mark_position(method_config)
+	if self:analyze_structure() == AnalysisStatus.InvalidWord then
+		return false
+	end
 	local p = _privates[self]
 	local tone, tidx = p.tone_mark, p.tone_mark_idx
 
@@ -208,8 +213,11 @@ function WordEngine:update_tone_mark_position(method_config)
 		return false
 	end
 
-	p.word[tidx] = util.level(p.word[tidx], 2)
-	p.word[new_idx] = util.merge_tone_to_lv2_vowel(vowel, tone)
+	local word = p.word
+	word[tidx] = util.level(word[tidx], 2)
+
+	--- @cast tone Diacritic
+	word[new_idx] = util.merge_tone_to_lv2_vowel(vowel, tone)
 	p.tone_mark = tone
 	p.tone_mark_idx = new_idx
 	return true
@@ -228,10 +236,6 @@ function WordEngine:find_tone_mark_position(style, force_recheck)
 	self:analyze_structure()
 
 	local p = _privates[self]
-	assert(
-		p.analysis_status ~= AnalysisStatus.Unanalyzed,
-		"WordEngine:analyze_structure() must be called before find_tone_mark_position()"
-	)
 
 	if p.vowel_start < 0 then
 		return nil, -1
@@ -251,7 +255,6 @@ function WordEngine:find_tone_mark_position(style, force_recheck)
 	if not vnorms then
 		return nil, -1
 	end
-	-- local vlen = util.caculate_distance(vs, ve)
 
 	-- check if precomputed diphthongs or triphthongs
 	local v_seq = tbl_concat(vnorms, "", vs, ve)
@@ -282,14 +285,20 @@ end
 --- @param vowel_end integer The index of the last vowel (1-based)
 --- @return VowelSeqStatus The status of the vowel sequence
 --- @return table|nil The normalized vowel sequence if it exists
---- @return Diacritic The tone mark if it exists
+--- @return Diacritic|nil The tone mark if it exists
 --- @return integer The index of the tone mark in the vowel sequence (1-based), or -1 if no tone mark exists
 local function detect_vowel_seq_and_tone(chars, chars_size, vowel_start, vowel_end)
-	local tone_mark = Diacritic.Flat
+	local tone_mark = nil
+	local tone_mark_idx = -1
 	local status = VowelSeqStatus.Valid
+
 	if vowel_start == vowel_end then
-		tone_mark = util.get_tone_mark(chars[vowel_start])
-		return status, chars[vowel_start], tone_mark, tone_mark and vowel_start or -1
+		local lv2
+		lv2, tone_mark = util.strip_tone(chars[vowel_start])
+		if tone_mark then
+			tone_mark_idx = vowel_start
+		end
+		return status, { [vowel_start] = lv2 }, tone_mark, tone_mark_idx
 	end
 
 	-- convert the vowel to level 2 and store in a new layer with the same index in word
@@ -300,7 +309,6 @@ local function detect_vowel_seq_and_tone(chars, chars_size, vowel_start, vowel_e
 	--   [3] = "o",
 	-- }
 	local vnorms = {}
-	local tone_mark_idx = -1
 	-- Check if the word has a tone-marked vowel
 	for i = vowel_start, vowel_end do
 		local tone
@@ -335,7 +343,7 @@ local function detect_onset_cluster(chars, vowel_start, vowel_end)
 	local cluster_len = vowel_start - 1
 	if cluster_len == 0 then
 		return true, cluster_len
-	elseif cluster_len > MAX_CONSONANT_CLUSTERS_LENGTH then
+	elseif cluster_len > MAX_ONSET_LENGTH then
 		return false, cluster_len
 	elseif cluster_len == 1 and vowel_end > vowel_start and ONSETS[tbl_concat(chars, "", 1, 2)] then
 		-- Special case: consonant overlaps with vowel
@@ -366,11 +374,11 @@ end
 --- @param vowel_end integer The index of the first vowel (1-based)
 --- @return boolean is_valid True if the consonant cluster is valid, false otherwise
 local function validate_coda_cluster(chars, chars_size, vowel_end)
-	assert(vowel_end >= 1 and vowel_end <= chars_size, "Invalid last vowel index")
+	-- assert(vowel_end >= 1 and vowel_end <= chars_size, "Invalid last vowel index")
 	local cluster_len = chars_size - vowel_end
 	if cluster_len == 0 then
 		return true
-	elseif cluster_len > MAX_CODA_CLUSTERS_LENGTH then
+	elseif cluster_len > MAX_CODA_LENGTH then
 		return false
 	end
 	return CODAS[tbl_concat(chars, "", vowel_end + 1, chars_size)] ~= nil
@@ -395,66 +403,74 @@ end
 --- @return AnalysisStatus The analysis state of the word
 function WordEngine:analyze_structure(force)
 	local p = _privates[self]
+	local status = p.analysis_status
 
-	if not force and p.analysis_status ~= AnalysisStatus.Unanalyzed then
-		return p.analysis_status
+	if not force and status ~= AnalysisStatus.MustAnalyze and status ~= AnalysisStatus.Unanalyzed then
+		return status
 	end
 
-	-- default is valid
-	p.analysis_status = AnalysisStatus.ValidWord
+	status = AnalysisStatus.ValidWord
 
 	local word, len = p.word, p.word_len
 	if len == 1 then
 		-- Single character word
 		-- no need to analyze, it's a valid word
-		p.analysis_status = AnalysisStatus.DiacriticReady
-		return p.analysis_status
+		status = AnalysisStatus.DiacriticReady
+		p.analysis_status = status
+		return status
 	end
 
 	local vs, ve, _ = util.find_vowel_seq_bounds(word, len)
 	if not are_valid_vowel_indices(vs, ve, len) then
-		p.analysis_status = AnalysisStatus.InvalidWord
-		return p.analysis_status
+		status = AnalysisStatus.InvalidWord
+		p.analysis_status = status
+		return status
 	end
 
 	local vowel_seq_status
 	vowel_seq_status, p.vnorms, p.tone_mark, p.tone_mark_idx = detect_vowel_seq_and_tone(word, len, vs, ve)
 
 	if vowel_seq_status == VowelSeqStatus.Invalid then
-		p.analysis_status = AnalysisStatus.InvalidWord
-		return p.analysis_status
+		status = AnalysisStatus.InvalidWord
+		p.analysis_status = status
+		return status
 	elseif vowel_seq_status == VowelSeqStatus.Ambiguous then
-		p.analysis_status = AnalysisStatus.DiacriticReady
+		status = AnalysisStatus.DiacriticReady
 	end
 
 	local valid, onset_end = detect_onset_cluster(word, vs, ve)
 	if not valid then
-		p.analysis_status = AnalysisStatus.InvalidWord
-		return p.analysis_status
+		status = AnalysisStatus.InvalidWord
+		p.analysis_status = status
+		return status
 	end
 
 	vs, ve = fix_onset_vowel_conflict(onset_end, vs, ve)
 	if not are_valid_vowel_indices(vs, ve, len) then
-		p.analysis_status = AnalysisStatus.InvalidWord
-		return p.analysis_status
+		status = AnalysisStatus.InvalidWord
+		p.analysis_status = status
+		return status
 	end
 	p.vowel_start_adjust = vs - onset_end
 
 	if not validate_coda_cluster(word, len, ve) then
-		p.analysis_status = AnalysisStatus.InvalidWord
-		return AnalysisStatus.InvalidWord
+		status = AnalysisStatus.InvalidWord
+		p.analysis_status = status
+		return status
 	end
 
 	p.vowel_start = vs
 	p.vowel_end = ve
-
-	return p.analysis_status
+	p.analysis_status = status
+	return status
 end
 
 --- Removes the tone mark from the main vowel in the word
+--- @param self WordEngine The WordEngine instance
 --- @param method_config table|nil The method configuration to use for tone removal
 --- @return boolean True if the tone mark was removed, false otherwise
-function WordEngine:remove_tone(method_config)
+---@diagnostic disable-next-line: unused-local
+local function remove_tone(self, method_config)
 	local p = _privates[self]
 	local word, tone, tidx = p.word, p.tone_mark, p.tone_mark_idx
 	if not tone then
@@ -468,7 +484,7 @@ function WordEngine:remove_tone(method_config)
 end
 
 --- Processes tone marks in the word
-function WordEngine:processes_tone(method_config)
+local function processes_tone(self, method_config)
 	local p = _privates[self]
 
 	local inserted_char_index = p.inserted_char_index
@@ -533,13 +549,8 @@ local function collect_effects(chars, vs, ve, key, method_config)
 	return effects, ecount
 end
 
-function WordEngine:processes_shape(method_config)
+local function processes_shape(self, method_config)
 	local p = _privates[self]
-
-	assert(
-		p.analysis_status ~= AnalysisStatus.Unanalyzed,
-		"WordEngine:analyze_structure() must be called before processes_shape()"
-	)
 
 	local word, word_len, inserted_char_index = p.word, p.word_len, p.inserted_char_index
 	local vs, ve = p.vowel_start, p.vowel_end
@@ -581,6 +592,7 @@ function WordEngine:processes_shape(method_config)
 
 			if status == VowelSeqStatus.Valid then
 				p.vnorms = new_vnorms
+				p.analysis_status = AnalysisStatus.ValidWord
 				self:update_tone_mark_position(method_config)
 				return true
 			end
@@ -602,81 +614,78 @@ function WordEngine:processes_shape(method_config)
 
 	for i = 1, ecount do
 		local e = effects[i]
-		local e_idx, e_c = e[1],e[2]
-		if e_idx >= inserted_char_index then
-			goto continue
-		end
+		local e_idx, e_c = e[1], e[2]
+		if e_idx < inserted_char_index then
+			if e[4] then
+				-- restore shape diacritic
+				self:restore_raw({
+					[e_idx] = util.strip_shape(e_c),
+				})
 
-		if e[4] then
-			-- restore shape diacritic
-			self:restore_raw({
-				[e_idx] = util.strip_shape(e_c),
-			})
+				return true
+			end
+			-- not in vowel sequence means a consonant
+			-- d
+			if e_idx < vs or e_idx > ve then
+				word[e_idx] = util.merge_diacritic(e_c, e[3])
+				return true
+			end
 
-			return true
-		end
-		-- not in vowel sequence means a consonant
-		-- d
-		if e_idx < vs or e_idx > ve then
+			-- in vowel sequence
 			word[e_idx] = util.merge_diacritic(e_c, e[3])
-			return true
+			local status, new_vnorms = detect_vowel_seq_and_tone(word, word_len, vs, ve)
+			if status == VowelSeqStatus.Valid then
+				p.vnorms = new_vnorms
+				p.analysis_status = AnalysisStatus.ValidWord
+				self:update_tone_mark_position(method_config)
+				return true
+			elseif i == ecount then
+				-- can not apply the shape diacritic
+				self:restore_raw({})
+				p.analysis_status = AnalysisStatus.MustAnalyze
+				return false
+			end
+			-- restore the before state
+			word[e_idx] = e_c
 		end
-
-		-- in vowel sequence
-		word[e_idx] = util.merge_diacritic(e_c, e[3])
-		local status, new_vnorms = detect_vowel_seq_and_tone(word, word_len, vs, ve)
-		if status == VowelSeqStatus.Valid then
-			p.vnorms = new_vnorms
-			self:update_tone_mark_position(method_config)
-			return true
-		elseif i == ecount then
-			-- can not apply the shape diacritic
-			self:restore_raw({})
-			p.analysis_status = AnalysisStatus.MustAnalyze
-			return false
-		end
-    -- restore the before state
-    word[e_idx] = e_c
-		::continue::
 	end
 
 	return false
 end
 
 --- Processes diacritics in the word
+--- @param method_config table The method configuration to use for processing diacritics
+--- @return boolean changed True if the diacritic was processed, false otherwise
 function WordEngine:processes_diacritic(method_config)
 	if self:analyze_structure() == AnalysisStatus.InvalidWord then
 		return false
 	end
+	-- vim.notify(vim.inspect(_privates[self]), vim.log.levels.DEBUG, { title = "WordEngine" })
 	local inserted_char = self:inserted_char()
 	if method_config_util.is_tone_removal_key(inserted_char, method_config) then
-		return self:remove_tone(method_config)
-	end
-
-	if method_config_util.is_shape_key(inserted_char, method_config) then
-		return self:processes_shape(method_config)
-	end
-
-	if method_config_util.is_tone_key(inserted_char, method_config) then
-		return self:processes_tone(method_config)
+		return remove_tone(self, method_config)
+	elseif method_config_util.is_shape_key(inserted_char, method_config) then
+		return processes_shape(self, method_config)
+	elseif method_config_util.is_tone_key(inserted_char, method_config) then
+		return processes_tone(self, method_config)
 	end
 	return false
 end
---- Checks if the word is a valid Vietnamese word
---- @return boolean True if the word is a valid Vietnamese word, false otherwise
-function WordEngine:is_valid_vietnamese_word()
-	local p = _privates[self]
-	if p.word_len == 1 then
-		return util.is_vietnamese_vowel(p.word[1])
-	end
-	self:analyze_structure()
+-- --- Checks if the word is a valid Vietnamese word
+-- --- @return boolean True if the word is a valid Vietnamese word, false otherwise
+-- function WordEngine:is_valid_vietnamese_word()
+-- 	local p = _privates[self]
+-- 	if p.word_len == 1 then
+-- 		return util.is_vietnamese_vowel(p.word[1])
+-- 	end
+-- 	self:analyze_structure()
 
-	if p.vowel_start < 1 then
-		return false
-	end
+-- 	if p.vowel_start < 1 then
+-- 		return false
+-- 	end
 
-	return true
-end
+-- 	return true
+-- end
 
 --- Returns the cell boundaries of the cursor position
 --- @param cursor_cell_idx integer The current column position of the cursor

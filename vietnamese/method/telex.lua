@@ -5,7 +5,7 @@ local M = {
 		["s"] = ENUM_DIACRITIC.Acute,
 		["f"] = ENUM_DIACRITIC.Grave,
 		["r"] = ENUM_DIACRITIC.Hook,
-		["x"] = ENUM_DIACRITIC.Tildle,
+		["x"] = ENUM_DIACRITIC.Tilde,
 		["j"] = ENUM_DIACRITIC.Dot,
 	},
 	tone_removal_keys = { "z" },
@@ -35,10 +35,6 @@ local M = {
 			o = ENUM_DIACRITIC.Circumflex,
 		},
 
-		u = {
-			u = ENUM_DIACRITIC.Horn,
-		},
-
 		d = {
 			d = ENUM_DIACRITIC.HorizontalStroke,
 		},
@@ -50,7 +46,7 @@ local M = {
 	-- Check if a character is a valid input character to make a Vietnamese character
 	--
 	is_diacritic_pressed = function(char)
-		return char:lower():match("[sfrxjzawdeou]") ~= nil
+		return char:lower():match("[sfrxjzawdeo]") ~= nil
 	end,
 }
 
