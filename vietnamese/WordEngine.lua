@@ -199,7 +199,7 @@ end
 ----- Updates the position of the tone mark in the word
 --- @param method_config table|nil The method configuration to use for updating the tone mark position
 --- @return boolean changed true if the tone mark position was updated, false otherwise
-function WordEngine:update_tone_mark_position(method_config)
+function WordEngine:update_tone_pos(method_config)
 	if self:analyze_structure() == StructInvalid then
 		return false
 	end

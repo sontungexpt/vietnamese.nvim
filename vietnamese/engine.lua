@@ -195,7 +195,7 @@ M.setup = function()
 				-- if not changed, then check the vowel
 				if not changed and is_vowel then
 					word_engine:feedkey()
-					changed = word_engine:update_tone_mark_position(method_config)
+					changed = word_engine:update_tone_pos(method_config)
 				end
 
 				-- if still not changed, then end
