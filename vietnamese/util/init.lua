@@ -275,6 +275,7 @@ end
 local has_tone_marked = function(c)
 	local len = #c
 	if len < 2 or len > 3 then
+		-- an ascii character or a 4-byte character
 		return false
 	end
 	local comp = UTF8_VNCHAR_COMPONENT[c]
@@ -282,6 +283,25 @@ local has_tone_marked = function(c)
 end
 M.has_tone_marked = has_tone_marked
 
+--- Strip the tone from a character
+--- @param c string The character to strip the tone from
+--- @return string lv2_c The character without the tone (lv2 char), or the original character if no tone was found
+--- @return Diacritic|nil removed_tone The tone if it was stripped, or nil if no tone was found
+local strip_tone = function(c)
+	local len = #c
+	if len < 2 or len > 3 then
+		-- skip ascii characters or 4-byte characters
+		return c, nil
+	end
+
+	local comp = UTF8_VNCHAR_COMPONENT[c]
+	if not comp then
+		return c, nil
+	end
+	return comp[2], comp.tone
+end
+
+M.strip_tone = strip_tone
 --- Check if a character has a shape
 --- @param c string The character to checks
 --- @return boolean True if the character has a shape, false otherwise
@@ -299,6 +319,12 @@ end
 --- @return string lv1_c The character without the shape (level 1 character), or the original character if no shape was find_vowel_seq_bounds
 --- @return Diacritic|nil stripped_shape The shape of the character if it exists, or nil if notify
 M.strip_shape = function(c)
+	local len = #c
+	if len < 2 or len > 3 then
+		-- skip ascii characters or 4-byte characters
+		return c, nil
+	end
+
 	local dict = UTF8_VNCHAR_COMPONENT[c]
 	if not dict or not dict.shape then
 		return c, nil
@@ -337,10 +363,11 @@ end
 --- @return Diacritic|nil The original diacritic if it was replaced, or nil if no replace was possible
 M.merge_diacritic = function(c, diacritic, force)
 	if Diacritic.is_flat(diacritic) then
-		return M.strip_tone(c)
+		return strip_tone(c)
 	end
 	local is_tone = Diacritic.is_tone(diacritic)
-	local lv1, lv2, shape, tone = M.decompose_char(c)
+	local comp = UTF8_VNCHAR_COMPONENT[c]
+	local lv1, lv2, shape, tone = comp[1], comp[2], comp.shape, comp.tone
 	if is_tone then
 		local tone_map = DIACRITIC_MAP[lv2]
 		if not tone_map then
@@ -392,22 +419,15 @@ M.unique_tone_marked = function(chars, chars_size, i, j)
 	return true
 end
 
---- Strip the tone from a character
---- @param c string The character to strip the tone from
---- @return string lv2_c The character without the tone (lv2 char), or the original character if no tone was found
---- @return Diacritic|nil removed_tone The tone if it was stripped, or nil if no tone was found
-M.strip_tone = function(c)
-	local comp = UTF8_VNCHAR_COMPONENT[c]
-	if not comp then
-		return c, nil
-	end
-	return comp[2], comp.tone
-end
-
 --- Get the tone mark of a character
 --- @param c string The character to get the tone mark from
 --- @return Diacritic|nil The tone mark if it exists, or nil if not
 M.get_tone_mark = function(c)
+	local len = #c
+	if len < 2 or len > 3 then
+		return nil
+	end
+
 	local dict = UTF8_VNCHAR_COMPONENT[c]
 	if not dict then
 		return nil
@@ -416,6 +436,11 @@ M.get_tone_mark = function(c)
 end
 
 M.strip_diacritics = function(c)
+	local len = #c
+	if len < 2 or len > 3 then
+		-- skip ascii characters or 4-byte characters
+		return c, nil, nil
+	end
 	local dict = UTF8_VNCHAR_COMPONENT[c]
 	if not dict then
 		return c, nil, nil
