@@ -1,20 +1,20 @@
 local vim = vim
 local api = vim.api
 local nvim_buf_get_text = api.nvim_buf_get_text
-local tbl_concat = table.concat
 local str_utf_pos = vim.str_utf_pos
+local tbl_concat = table.concat
 
 local CONSTANT = require("vietnamese.constant")
 local UTF8_VNCHAR_COMPONENT = CONSTANT.UTF8_VNCHAR_COMPONENT
 local DIACRITIC_MAP = CONSTANT.DIACRITIC_MAP
-local BASE_VOWEL_PRIORITY = CONSTANT.VOWEL_PRIORITY
+local VOWEL_PRIORITY = CONSTANT.VOWEL_PRIORITY
 local Diacritic = CONSTANT.Diacritic
 
 local M = {}
 
 --- Reverse a table in place
 --- @param tbl table: Table to reverse
---- @param len number: Optional length of the table to reverse (default is #tbl)
+--- @param len integer: Optional length of the table to reverse (default is #tbl)
 --- @return table: Reversed table
 M.reverse_list = function(tbl, len)
 	len = len or #tbl
@@ -27,6 +27,31 @@ M.reverse_list = function(tbl, len)
 	end
 	return tbl
 end
+
+local function concat_tight_range(list, i, j, list_size)
+	i = i or 1
+	j = j or list_size or #list
+
+	local len = j - i + 1
+	if len < 1 then
+		error("Invalid range: " .. i .. " to " .. j)
+	elseif len == 1 then
+		return list[i]
+	elseif len == 2 then
+		return list[i] .. list[j]
+	elseif len == 3 then
+		return list[i] .. list[i + 1] .. list[j]
+	elseif len < 31 then
+		return tbl_concat(list, "", i, j)
+	end
+
+	local buf = {}
+	for k = i, j do
+		buf[#buf + 1] = list[k]
+	end
+	return tbl_concat(buf)
+end
+M.concat_tight_range = concat_tight_range
 
 --- Convert a string to a table of characters
 --- @param str string: The string to Convert
@@ -46,25 +71,29 @@ end
 --- Get the UTF-8 positions of characters in a string
 --- @param str string: The string to get positions from
 --- @return fun(): (number|nil, string|nil) An iterator function that returns the start position of each character
+--- @return integer: The length of the position table
 --- and the character itself
 --- This function is used to iterate over the characters in a string
 function M.iter_chars(str)
 	local pos = str_utf_pos(str)
+	local len = #pos
 	local i = 0
 	return function()
 		i = i + 1
-		local start_idx = pos[i]
-		if not start_idx then
+		if i > len then
 			return nil, nil
 		end
+		local start_idx = pos[i]
 		local start_next = pos[i + 1]
-		return i, str:sub(start_idx, start_next ~= nil and start_next - 1 or nil)
-	end
+		return i, str:sub(start_idx, start_next ~= nil and start_next - 1 or #str)
+	end,
+		len
 end
 
 --- Iterate over characters in a string in reverse ordered
 --- @param str string: The string to iterate over
 --- @return fun(): (number|nil, string|nil, number|nil) An iterator function that returns the index, character, and position
+--- @return integer: The length of the position table
 --- index: The index start from 1 of the character in the string
 --- string: The character at the current index
 --- real_index: The real index of the character in the string
@@ -74,26 +103,55 @@ function M.iter_chars_reverse(str)
 	local i = len + 1
 	return function()
 		i = i - 1
-		local start_idx = pos[i]
-		if not start_idx then
+		if i < 1 then
 			return nil, nil, nil
 		end
+		local start_idx = pos[i]
 		local start_next = pos[i + 1]
 		return len - i + 1, str:sub(start_idx, start_next ~= nil and start_next - 1 or nil), i
-	end
+	end,
+		len
 end
+
+--- Convert a character to lowercase
+--- @param c string: The character to convert
+--- @return string: The lowercase version of the character
+local function lower_char(c)
+	local len = #c
+	if len == 1 then
+		return c:lower()
+	elseif len == 2 or len == 3 then
+		local comp = UTF8_VNCHAR_COMPONENT[c]
+		return comp and comp.lo or c:lower()
+	elseif len == 4 then
+		-- a trick to make it faster
+		-- because this case is rarely used
+		return c:lower()
+	elseif len == 0 then
+		return ""
+	end
+	error("Invalid character length: " .. len .. " for character: " .. c)
+end
+M.lower_char = lower_char
 
 --- Convert a string to lowercase
 --- @param word string The string to Convert
 --- @return string The lowercase version of the starting
 local function lower(word)
-	local chars = {}
-	for i, char in M.iter_chars(word) do
-		local comp = UTF8_VNCHAR_COMPONENT[char]
-		chars[i] = comp and comp.lo or char:lower()
+	if word == "" then
+		return ""
 	end
 
-	return tbl_concat(chars)
+	local iter, len = M.iter_chars(word)
+	if len == 1 then
+		return lower_char(word)
+	end
+
+	local chars = {}
+	for i, char in iter() do
+		chars[i] = lower_char(char)
+	end
+	return concat_tight_range(chars)
 end
 M.lower = lower
 
@@ -109,16 +167,42 @@ function M.is_lower(c)
 	return comp.lo ~= nil
 end
 
+--- Convert a character to uppercase
+--- @param c string: The character to Convert
+--- @return string uppered_char The uppercase version of the characters
+--- @see M.upper
+local function upper_char(c)
+	local len = #c
+	if len == 1 then
+		return c:upper()
+	elseif len == 2 or len == 3 then
+		local comp = UTF8_VNCHAR_COMPONENT[c]
+		return comp and comp.up or c:upper()
+	elseif len == 4 then
+		-- a trick to make it faster
+		-- because this case is rarely used
+		return c:upper()
+	elseif len == 0 then
+		return ""
+	end
+	error("Invalid character length: " .. len .. " for character: " .. c)
+end
+
 --- Convert a string to uppercase
 --- @param word string The string to Convert
 --- @return string The uppercase version of the starting
 function M.upper(word)
-	local chars = {}
-	for i, char in M.iter_chars(word) do
-		local comp = UTF8_VNCHAR_COMPONENT[char]
-		chars[i] = comp and comp.up or char:upper()
+	local iter, len = M.iter_chars(word)
+	if len == 0 then
+		return ""
+	elseif len < 2 then
+		return upper_char(word)
 	end
-	return tbl_concat(chars)
+	local chars = {}
+	for i, char in iter() do
+		chars[i] = upper_char(char)
+	end
+	return concat_tight_range(chars)
 end
 
 --- Check if a character is uppercase
@@ -138,8 +222,8 @@ end
 --- @param level 1|2 The level to check (1 or 2)
 --- @return string The character at the specified level, or the original character if not found
 local level = function(c, level)
-	assert(c ~= nil, "c must not be nil")
-	return UTF8_VNCHAR_COMPONENT[c] and UTF8_VNCHAR_COMPONENT[c][level] or c
+	local comp = UTF8_VNCHAR_COMPONENT[c]
+	return comp and comp[level] or c
 end
 M.level = level
 
@@ -148,8 +232,16 @@ M.level = level
 --- @param strict boolean|nil If true, checks for strict Vietnamese vowels (no accept tone char like "á", "à", etc.)
 --- @return boolean is_vowel True if the character is a Vietnamese vowel, false otherwise
 local function is_vietnamese_vowel(c, strict)
-	c = strict and lower(c) or level(lower(c), 2)
-	return BASE_VOWEL_PRIORITY[c] ~= nil
+	if #c > 3 then
+		return false
+	elseif strict then
+		return VOWEL_PRIORITY[lower_char(c)] ~= nil
+	elseif UTF8_VNCHAR_COMPONENT[c] and c ~= "đ" and c ~= "Đ" then
+		-- all utf8 vowel characters are considered Vietnamese vowels
+		return true
+	end
+	--- ascii vơwel
+	return VOWEL_PRIORITY[c:lower()] ~= nil
 end
 M.is_vietnamese_vowel = is_vietnamese_vowel
 
@@ -164,26 +256,42 @@ end
 --- @param char string The character to check
 --- @return boolean True if the character is a Vietnamese character, false otherwise
 function M.is_vietnamese_char(char)
-	if char == nil or char == "" then
+	local len = #char
+	if len == 1 then
+		-- ascii check
+		local byte = char:byte()
+		return byte >= 97 and byte <= 122 -- a-z
+			or byte >= 65 and byte <= 90 -- A-Z
+	elseif len < 1 or len > 3 then
 		return false
-	elseif UTF8_VNCHAR_COMPONENT[char] ~= nil then
-		return true
 	end
-	return char:match("^%a$") ~= nil
+	-- check for all 2-byte and 3-byte Vietnamese characters
+	return UTF8_VNCHAR_COMPONENT[char] ~= nil
 end
 
 --- Check if a character has a tone
 --- @param c string The character to check
 --- @return boolean True if the character has a tone, false otherwise
-M.has_tone_marked = function(c)
-	return UTF8_VNCHAR_COMPONENT[c] ~= nil and UTF8_VNCHAR_COMPONENT[c].tone ~= nil
+local has_tone_marked = function(c)
+	local len = #c
+	if len < 2 or len > 3 then
+		return false
+	end
+	local comp = UTF8_VNCHAR_COMPONENT[c]
+	return comp ~= nil and comp.tone ~= nil
 end
+M.has_tone_marked = has_tone_marked
 
 --- Check if a character has a shape
 --- @param c string The character to checks
 --- @return boolean True if the character has a shape, false otherwise
 M.has_shape = function(c)
-	return UTF8_VNCHAR_COMPONENT[c] ~= nil and UTF8_VNCHAR_COMPONENT[c].shape ~= nil
+	local len = #c
+	if len < 2 or len > 3 then
+		return false
+	end
+	local comp = UTF8_VNCHAR_COMPONENT[c]
+	return comp ~= nil and comp.shape ~= nil
 end
 
 --- Strip the shape from a Vietnamese character
@@ -210,7 +318,7 @@ end
 --- @param tone Diacritic The tone to attach_tone_to_lv2_char
 --- @return string The character with the attached tone, or the original character if no tone was found
 --- @return boolean True if the tone was successfully attached, false otherwise
-M.merge_tone_to_lv2_vowel = function(lv2_c, tone)
+M.merge_tone_lv2 = function(lv2_c, tone)
 	local tone_map = DIACRITIC_MAP[lv2_c]
 
 	if not tone_map then
@@ -274,7 +382,7 @@ M.unique_tone_marked = function(chars, chars_size, i, j)
 	local count = 0
 	for k = (i or 1), (j or chars_size) do
 		local c = chars[k]
-		if M.has_tone_marked(c) then
+		if has_tone_marked(c) then
 			count = count + 1
 		end
 		if count > 1 then
@@ -286,14 +394,14 @@ end
 
 --- Strip the tone from a character
 --- @param c string The character to strip the tone from
---- @return string The character without the tone (lv2 char), or the original character if no tone was found
---- @return Diacritic|nil The tone if it was stripped, or nil if no tone was found
+--- @return string lv2_c The character without the tone (lv2 char), or the original character if no tone was found
+--- @return Diacritic|nil removed_tone The tone if it was stripped, or nil if no tone was found
 M.strip_tone = function(c)
-	local dict = UTF8_VNCHAR_COMPONENT[c]
-	if not dict then
+	local comp = UTF8_VNCHAR_COMPONENT[c]
+	if not comp then
 		return c, nil
 	end
-	return dict[2], dict.tone
+	return comp[2], comp.tone
 end
 
 --- Get the tone mark of a character
@@ -328,21 +436,15 @@ function M.find_vowel_seq_bounds(chars, chars_size)
 	for i = 1, chars_size do
 		if is_vietnamese_vowel(chars[i]) then
 			first = i
-			break
+
+			for j = chars_size, i, -1 do
+				if is_vietnamese_vowel(chars[j]) then
+					last = j
+					break
+				end
+			end
 		end
 	end
-
-	if first < 0 then
-		return first, last, false
-	end
-
-	for i = chars_size, 1, -1 do
-		if is_vietnamese_vowel(chars[i]) then
-			last = i
-			break
-		end
-	end
-
 	return first, last, first == last
 end
 
@@ -398,8 +500,6 @@ end
 --- @param j integer The ending index (1-based)
 --- @return boolean True if all characters are vowels, false otherwise
 function M.all_vowels(chars, chars_size, strict, i, j)
-	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
-
 	for k = (i or 1), (j or chars_size) do
 		if not is_vietnamese_vowel(chars[k], strict) then
 			return false
@@ -408,26 +508,23 @@ function M.all_vowels(chars, chars_size, strict, i, j)
 	return true
 end
 
-function M.get_max_repetition_time(char)
+local two_repetition_chars = {
+	["o"] = true,
+	["u"] = true,
+	["c"] = true,
+	["n"] = true,
+	["m"] = true,
+	["g"] = true,
+	["h"] = true,
+	["p"] = true,
+	["t"] = true,
+}
+local function get_max_repetition_time(char)
 	if char == nil or char == "" then
 		return char, 0
 	end
-
-	local lv1_c = lower(level(char, 1))
-	if
-		lv1_c == "o"
-		or lv1_c == "u"
-		or lv1_c == "c"
-		or lv1_c == "n"
-		or lv1_c == "m"
-		or lv1_c == "g"
-		or lv1_c == "h"
-		or lv1_c == "p"
-		or lv1_c == "t"
-	then
-		return lv1_c, 2
-	end
-	return lv1_c, 1
+	local lv1_c = lower_char(level(char, 1))
+	return lv1_c, two_repetition_chars[lv1_c] and 2 or 1
 end
 
 --- Check if the repetition of vowels in a character sequence exceeds the maximum allowed repetition 13:44
@@ -436,12 +533,10 @@ end
 --- @param i integer|nil The starting index (1-based)
 --- @param j integer|nil The ending index (1-based)
 --- @return boolean True if the repetition exceeds the maximum allowed, false otherwise
-function M.is_exceeded_vowel_repetition_time(chars, chars_size, i, j)
-	assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
-
+function M.exceeded_repetition_time(chars, chars_size, i, j)
 	local times = {}
 	for k = (i or 1), (j or chars_size) do
-		local level1_c, time = M.get_max_repetition_time(chars[k])
+		local level1_c, time = get_max_repetition_time(chars[k])
 		local curr_time = (times[level1_c] or 0) + 1
 		if curr_time > time then
 			return true
@@ -458,21 +553,19 @@ end
 --- @return Diacritic|nil The shape diacritic if it exists, or nil if not
 --- @return Diacritic|nil The tone if it exists, or nil if not
 function M.decompose_char(c)
-	assert(c, "c must not be nil")
-
-	local dict = UTF8_VNCHAR_COMPONENT[c]
-	if not dict then
+	local comp = UTF8_VNCHAR_COMPONENT[c]
+	if not comp then
 		return c, c, nil, nil
 	end
-	return dict[1], dict[2], dict.shape, dict.tone
+	return comp[1], comp[2], comp.shape, comp.tone
 end
 
 --- Copy a list to a new list
 --- @param list table: The list to copy_list
 --- @return table: A new list containing the same elements as the original copy_list
-function M.copy_list(list)
+function M.copy_list(list, list_size)
 	local new_list = {}
-	for i = 1, #list do
+	for i = 1, list_size or #list do
 		new_list[i] = list[i]
 	end
 	return new_list
@@ -517,14 +610,25 @@ function M.is_d(c)
 end
 
 function M.benchmark(func, ...)
+	---@diagnostic disable-next-line: undefined-field
 	local start_time = vim.uv.hrtime()
 	local result = { func(...) }
+	---@diagnostic disable-next-line: undefined-field
 	local end_time = vim.uv.hrtime()
 	local elapsed_time = (end_time - start_time) / 1e6 -- Convert to milliseconds
-	vim.notify(string.format("Benchmark: %s took %.2f ms", func, elapsed_time), vim.log.levels.INFO, {
-		title = "Vietnamese Utils Benchmark",
-	})
-	local unpack = table.unpack or unpack
+
+	-- print to file
+	local path = "/home/stilux/Data/Workspace/neovim-plugins/vietnamese/lua/benchmark.log"
+	local file = io.open(path, "a")
+	file:write(string.format("Benchmark: %s took %.2f ms\n", func, elapsed_time))
+	file:close()
+
+	-- print to vim notify
+
+	-- vim.notify(string.format("Benchmark: %s took %.2f ms", func, elapsed_time), vim.log.levels.INFO, {
+	-- 	title = "Vietnamese Utils Benchmark",
+	-- })
+	---@diagnostic disable-next-line: deprecated
 	return unpack(result)
 end
 

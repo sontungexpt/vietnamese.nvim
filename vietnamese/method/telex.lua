@@ -8,7 +8,10 @@ local M = {
 		["x"] = ENUM_DIACRITIC.Tilde,
 		["j"] = ENUM_DIACRITIC.Dot,
 	},
-	tone_removal_keys = { "z" },
+	tone_removal_keys = {
+		"z",
+		["z"] = true,
+	},
 	shape_keys = {
 		-- a = { a = ENUM_DIACRITIC.CIRCUMFLEX, w = ENUM_DIACRITIC.BREVE },
 		-- e = { e = ENUM_DIACRITIC.CIRCUMFLEX, w = ENUM_DIACRITIC.CIRCUMFLEX },
