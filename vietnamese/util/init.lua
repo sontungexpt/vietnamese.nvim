@@ -227,6 +227,21 @@ local level = function(c, level)
 end
 M.level = level
 
+--- Decompose a Vietnamese character into its base character, diacritic, shape diacritic, and tone
+--- @param c string The character to decompose_char
+--- @return string The base character at level 1
+--- @return string The character at level 2
+--- @return Diacritic|nil The shape diacritic if it exists, or nil if not
+--- @return Diacritic|nil The tone if it exists, or nil if not
+local function decompose_char(c)
+	local comp = UTF8_VNCHAR_COMPONENT[c]
+	if not comp then
+		return c, c, nil, nil
+	end
+	return comp[1], comp[2], comp.shape, comp.tone
+end
+M.decompose_char = decompose_char
+
 --- Check if a character is a Vietnamese vowel
 --- @param c string The character to check
 --- @param strict boolean|nil If true, checks for strict Vietnamese vowels (no accept tone char like "á", "à", etc.)
@@ -366,8 +381,7 @@ M.merge_diacritic = function(c, diacritic, force)
 		return strip_tone(c)
 	end
 	local is_tone = Diacritic.is_tone(diacritic)
-	local comp = UTF8_VNCHAR_COMPONENT[c]
-	local lv1, lv2, shape, tone = comp[1], comp[2], comp.shape, comp.tone
+	local lv1, lv2, shape, tone = decompose_char(c)
 	if is_tone then
 		local tone_map = DIACRITIC_MAP[lv2]
 		if not tone_map then
@@ -569,20 +583,6 @@ function M.exceeded_repetition_time(chars, chars_size, i, j)
 		times[level1_c] = curr_time
 	end
 	return false
-end
-
---- Decompose a Vietnamese character into its base character, diacritic, shape diacritic, and tone
---- @param c string The character to decompose_char
---- @return string The base character at level 1
---- @return string The character at level 2
---- @return Diacritic|nil The shape diacritic if it exists, or nil if not
---- @return Diacritic|nil The tone if it exists, or nil if not
-function M.decompose_char(c)
-	local comp = UTF8_VNCHAR_COMPONENT[c]
-	if not comp then
-		return c, c, nil, nil
-	end
-	return comp[1], comp[2], comp.shape, comp.tone
 end
 
 --- Copy a list to a new list
