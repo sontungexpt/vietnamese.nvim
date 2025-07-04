@@ -16,6 +16,54 @@ local WORST_CASE_WORD_LEN = THRESHOLD_WORD_LEN * 2 + 2
 
 local M = {}
 
+local enable_global_ime = function()
+	-- ibus
+	vim.system({
+		"ibus",
+		"exit",
+	}, {}, function(out)
+		if out and out.code == 0 then
+			require("vietnamese.notifier").info("Ibus has been disabled.")
+		end
+	end)
+
+	-- -- fcitx5
+	-- vim.system({
+	-- 	"fcitx5",
+	-- 	"disable",
+	-- }, {}, function(out)
+	-- 	if out and out.code == 0 then
+	-- 		require("vietnamese.notifier").info(
+	-- 			"Fcitx5 has been disabled. You can re-enable it by running `fcitx5 enable` in your terminal."
+	-- 		)
+	-- 	end
+	-- end)
+end
+
+local disable_global_ime = function()
+	--- ibus
+	vim.system({
+		"ibus",
+		"start",
+	}, {}, function(out)
+		if out and out.code == 0 then
+			require("vietnamese.notifier").info("Ibus has been enabled.")
+		end
+	end)
+
+	-- -- fcitx5
+	-- vim.system({
+	-- 	"fcitx5",
+	-- 	"enable",
+	-- }, {}, function(out)
+	-- 	if out and out.code == 0 then
+	-- 		require("vietnamese.notifier").info(
+	-- 			"Fcitx5 has been enabled. You can disable it by running `:VietnameseDisableFcitx5`."
+	-- 		)
+	-- 	end
+	-- end)
+end
+
 --- Check if a character is a valid input character for the current method
 local function is_diacritic_pressed(char, method_config)
 	if type(method_config.is_diacritic_pressed) == "function" then
@@ -113,7 +161,7 @@ end
 --- @param bufnr number: Buffer number
 --- @param row_0based number: Row of the cursor (0-based)
 --- @param col_0based number: Column of the cursor (0-based)
-function M.find_vnword_under_cursor(bufnr, row_0based, col_0based)
+local function find_vnword_under_cursor(bufnr, row_0based, col_0based)
 	-- Get both sides of the word
 	local left_chars, left_len = collect_left_chars(bufnr, row_0based, col_0based)
 	if left_len == THRESHOLD_WORD_LEN or left_len < 1 then
@@ -135,139 +183,226 @@ function M.find_vnword_under_cursor(bufnr, row_0based, col_0based)
 
 	return word_chars, word_len, left_len + 1
 end
+M.find_vnword_under_cursor = find_vnword_under_cursor
 
 M.setup = function()
+	local GROUP = api.nvim_create_augroup("VietnameseEngine", { clear = true })
+	local NAMESPACE = api.nvim_create_namespace("VietnameseEngine")
 	local bim_ok, bim_handler = pcall(require, "bim.handler")
-	local group = api.nvim_create_augroup("VietnameseEngine", { clear = true })
 
 	local inserted_char = ""
 	local inserting = false
-	local cword = nil
-	local cwlen = 0
+	local cword, cwlen = nil, 0
 	local inserted_idx = 0
-	local is_vowel = false
-	local local_disabled = false
+	local is_vowel_pressed = false
+	local buf_disabled = false
+	local deleting = false
 
 	local reset_state = function()
 		cword, cwlen, inserted_idx = nil, 0, 0
 		inserted_char = ""
 	end
 	api.nvim_create_autocmd({ "FocusGained", "FocusLost" }, {
-		group = group,
+		group = GROUP,
 		callback = function(args)
 			local event = args.event
 			if event == "FocusGained" then
-				return true
+				disable_global_ime()
 			else
-				return false
+				enable_global_ime()
 			end
 		end,
 	})
 
-	api.nvim_create_autocmd({ "BufEnter", "BufLeave" }, {
-		group = group,
+	api.nvim_create_autocmd({ "BufEnter" }, {
+		group = GROUP,
 		callback = function(args)
-			local event = args.event
 			if not config.is_enabled() then
 				return
-			elseif event == "BufEnter" then
+			else
 				local buftype = api.nvim_get_option_value("buftype", { buf = args.buf })
 				local filetype = api.nvim_get_option_value("filetype", { buf = args.buf })
-
-				if
-					not local_disabled
-					and (config.is_excluded_buftype(buftype) or config.is_excluded_filetype(filetype))
-				then
-					local_disabled = true
-				end
-			elseif event == "BufLeave" then
-				local_disabled = false
+				buf_disabled = config.is_excluded(filetype, buftype)
 			end
 		end,
 	})
 
-	api.nvim_create_autocmd({
-		"InsertCharPre",
-		"TextChangedI",
-	}, {
-		group = group,
+	api.nvim_create_autocmd({ "InsertEnter", "InsertLeave" }, {
+		group = GROUP,
 		callback = function(args)
-			if not config.is_enabled() or local_disabled then
-				return
-			elseif args.event == "InsertCharPre" then
-				inserting = true
-				inserted_char = v.char
-				is_vowel = util.is_level1_vowel(inserted_char)
-
-				if is_diacritic_pressed(inserted_char, config.get_method_config()) or is_vowel then
-					local pos = nvim_win_get_cursor(0)
-					cword, cwlen, inserted_idx = M.find_vnword_under_cursor(args.buf, pos[1] - 1, pos[2])
-				else
-					reset_state()
-				end
-
-				return
-			elseif not inserting then
-				reset_state()
-				-- we are removing characters, so we don't need to process
-				return
-			end
-			inserting = false -- Reset inserting state
-
-			util.benchmark(function()
-				-- nothing to handle
-				if not cword then
-					return
-				end
-				local method_config = config.get_method_config()
-				if not method_config then
+			local event = args.event
+			if event == "InsertEnter" then
+				if not config.is_enabled() or buf_disabled then
 					return
 				end
 
-				local changed = false
-				local word_engine = require("vietnamese.WordEngine"):new(cword, cwlen, inserted_char, inserted_idx)
+				---@diagnostic disable-next-line: unused-local
+				vim.on_key(function(key, typed)
+					is_vowel_pressed = util.is_level1_vowel(key)
 
-				-- check the diacritic key first
-				if word_engine:is_potential_diacritic_key(method_config) and word_engine:is_potential_vnword() then
-					changed = word_engine:processes_diacritic(method_config)
-				end
-
-				-- if not changed, then check the vowel
-				if not changed and is_vowel then
-					word_engine:feedkey()
-					changed = word_engine:update_tone_pos(method_config)
-				end
-
-				-- if still not changed, then end
-				if not changed then
-					return
-				end
-
-				local pos = nvim_win_get_cursor(0)
-				local row = pos[1] -- Row is 1-indexed in API
-				local row_0based = row - 1 -- Row is 0-indexed in API
-				local col_0based = pos[2] -- Column is 0-indexed
-
-				local new_word = word_engine:tostring()
-
-				local wstart, wend = word_engine:col_bounds(col_0based)
-
-				nvim_buf_set_text(0, row_0based, wstart, row_0based, wend, { new_word })
-
-				local new_cursor_col = word_engine:get_curr_cursor_col(col_0based)
-				if col_0based ~= new_cursor_col then
-					-- Restore cursor position
-					nvim_win_set_cursor(0, { row, new_cursor_col })
-					-- intergrate with bim
-					if bim_ok then
-						bim_handler.trigger_cursor_move_accepted()
+					if is_diacritic_pressed(key, config.get_method_config()) or is_vowel_pressed then
+						local pos = nvim_win_get_cursor(0)
+						cword, cwlen, inserted_idx = find_vnword_under_cursor(args.buf, pos[1] - 1, pos[2])
+						inserted_char = key
+						inserting = true
+					else
+						reset_state()
 					end
-				end
-
-				reset_state()
-			end)
+				end, NAMESPACE)
+			else
+				vim.on_key(nil, NAMESPACE)
+			end
 		end,
 	})
+	api.nvim_create_autocmd({ "TextChangedI" }, {
+		group = GROUP,
+		callback = function(args)
+			if not config.is_enabled() or buf_disabled then
+				return
+			elseif inserting then
+				inserting = false -- Reset inserting state
+
+				util.benchmark(function()
+					-- nothing to handle
+					if not cword then
+						return
+					end
+					local method_config = config.get_method_config()
+					if not method_config then
+						reset_state()
+						return
+					end
+
+					local changed = false
+					local word_engine = require("vietnamese.WordEngine"):new(cword, cwlen, inserted_char, inserted_idx)
+
+					-- check the diacritic key first
+					if word_engine:is_potential_diacritic_key(method_config) and word_engine:is_potential_vnword() then
+						changed = word_engine:processes_diacritic(method_config)
+					end
+
+					-- if not changed, then check the vowel
+					if not changed and is_vowel_pressed then
+						word_engine:feedkey()
+						changed = word_engine:update_tone_pos(method_config)
+					end
+
+					-- if still not changed, then end
+					if not changed then
+						reset_state()
+						return
+					end
+
+					local pos = nvim_win_get_cursor(0)
+					local row = pos[1] -- Row is 1-indexed in API
+					local row_0based = row - 1 -- Row is 0-indexed in API
+					local col_0based = pos[2] -- Column is 0-indexed
+
+					local new_word = word_engine:tostring()
+
+					local wstart, wend = word_engine:col_bounds(col_0based)
+
+					nvim_buf_set_text(0, row_0based, wstart, row_0based, wend, { new_word })
+
+					local new_cursor_col = word_engine:get_curr_cursor_col(col_0based)
+					if col_0based ~= new_cursor_col then
+						-- Restore cursor position
+						nvim_win_set_cursor(0, { row, new_cursor_col })
+						-- intergrate with bim
+						if bim_ok then
+							bim_handler.trigger_cursor_move_accepted()
+						end
+					end
+
+					reset_state()
+				end)
+			end
+		end,
+	})
+
+	-- api.nvim_create_autocmd({
+	-- 	"InsertCharPre",
+	-- 	"TextChangedI",
+	-- }, {
+	-- 	group = GROUP,
+	-- 	callback = function(args)
+	-- 		if not config.is_enabled() or buf_disabled then
+	-- 			return
+	-- 		elseif args.event == "InsertCharPre" then
+	-- 			inserting = true
+
+	-- 			inserted_char = v.char
+	-- 			is_vowel_pressed = util.is_level1_vowel(inserted_char)
+	-- 			if is_diacritic_pressed(inserted_char, config.get_method_config()) or is_vowel_pressed then
+	-- 				local pos = nvim_win_get_cursor(0)
+	-- 				cword, cwlen, inserted_idx = find_vnword_under_cursor(args.buf, pos[1] - 1, pos[2])
+	-- 			else
+	-- 				reset_state()
+	-- 			end
+	-- 			return
+	-- 		elseif not inserting then
+	-- 			-- we are removing characters, so we don't need to process
+	-- 			reset_state()
+	-- 			return
+	-- 		end
+	-- 		inserting = false -- Reset inserting state
+
+	-- 		util.benchmark(function()
+	-- 			-- nothing to handle
+	-- 			if not cword then
+	-- 				return
+	-- 			end
+	-- 			local method_config = config.get_method_config()
+	-- 			if not method_config then
+	-- 				reset_state()
+	-- 				return
+	-- 			end
+
+	-- 			local changed = false
+	-- 			local word_engine = require("vietnamese.WordEngine"):new(cword, cwlen, inserted_char, inserted_idx)
+
+	-- 			-- check the diacritic key first
+	-- 			if word_engine:is_potential_diacritic_key(method_config) and word_engine:is_potential_vnword() then
+	-- 				changed = word_engine:processes_diacritic(method_config)
+	-- 			end
+
+	-- 			-- if not changed, then check the vowel
+	-- 			if not changed and is_vowel_pressed then
+	-- 				word_engine:feedkey()
+	-- 				changed = word_engine:update_tone_pos(method_config)
+	-- 			end
+
+	-- 			-- if still not changed, then end
+	-- 			if not changed then
+	-- 				reset_state()
+	-- 				return
+	-- 			end
+
+	-- 			local pos = nvim_win_get_cursor(0)
+	-- 			local row = pos[1] -- Row is 1-indexed in API
+	-- 			local row_0based = row - 1 -- Row is 0-indexed in API
+	-- 			local col_0based = pos[2] -- Column is 0-indexed
+
+	-- 			local new_word = word_engine:tostring()
+
+	-- 			local wstart, wend = word_engine:col_bounds(col_0based)
+
+	-- 			nvim_buf_set_text(0, row_0based, wstart, row_0based, wend, { new_word })
+
+	-- 			local new_cursor_col = word_engine:get_curr_cursor_col(col_0based)
+	-- 			if col_0based ~= new_cursor_col then
+	-- 				-- Restore cursor position
+	-- 				nvim_win_set_cursor(0, { row, new_cursor_col })
+	-- 				-- intergrate with bim
+	-- 				if bim_ok then
+	-- 					bim_handler.trigger_cursor_move_accepted()
+	-- 				end
+	-- 			end
+
+	-- 			reset_state()
+	-- 		end)
+	-- 	end,
+	-- })
 end
 
 return M

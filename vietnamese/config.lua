@@ -8,7 +8,7 @@ local current_method_config = nil
 local default_config = {
 	enabled = true,
 	input_method = "telex", -- Default input method
-	excludes = {
+	excluded = {
 		filetypes = { "help" }, -- File types to exclude
 		buftypes = { "nowrite", "quickfix", "prompt" }, -- Buffer types to excludek
 	},
@@ -78,8 +78,24 @@ function M.is_excluded_filetype(filetype)
 		return false
 	end
 
-	local excludes = default_config.excludes.filetypes or {}
+	local excludes = default_config.excluded.filetypes or {}
 	return vim.tbl_contains(excludes, filetype)
+end
+
+M.is_excluded = function(filetype, buftype)
+	local excluded = default_config.excluded or {}
+	if type(filetype) == "string" then
+		if vim.tbl_contains(excluded.filetypes or {}, filetype) then
+			return true
+		end
+	end
+
+	if type(buftype) == "string" then
+		if vim.tbl_contains(excluded.buftypes or {}, buftype) then
+			return true
+		end
+	end
+	return false
 end
 
 function M.is_excluded_buftype(buftype)
@@ -87,7 +103,7 @@ function M.is_excluded_buftype(buftype)
 		return false
 	end
 
-	local excludes = default_config.excludes.buftypes or {}
+	local excludes = default_config.excluded.buftypes or {}
 	return vim.tbl_contains(excludes, buftype)
 end
 
