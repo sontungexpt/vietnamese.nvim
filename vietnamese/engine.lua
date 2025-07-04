@@ -204,6 +204,14 @@ M.setup = function()
 		inserted_char = ""
 	end
 
+	local function register_onkey(cb, opts)
+		vim.on_key(cb, NAMESPACE, opts)
+	end
+
+	local unregister_onkey = function()
+		vim.on_key(nil, NAMESPACE)
+	end
+
 	api.nvim_create_autocmd({ "FocusGained", "FocusLost" }, {
 		group = GROUP,
 		callback = function(args)
@@ -234,7 +242,7 @@ M.setup = function()
 			local event, bufnr = args.event, args.buf
 			if config.is_enabled() and not buf_disabled and event == "InsertEnter" then
 				---@diagnostic disable-next-line: unused-local
-				vim.on_key(function(key, typed)
+				register_onkey(function(key, typed)
 					if not api.nvim_buf_is_valid(bufnr) then
 						reset_state()
 						return
@@ -252,10 +260,10 @@ M.setup = function()
 					else
 						reset_state()
 					end
-				end, NAMESPACE)
+				end)
 			else
 				-- unregister the key handler
-				vim.on_key(nil, NAMESPACE)
+				unregister_onkey()
 			end
 		end,
 	})
