@@ -224,10 +224,6 @@ M.setup = function()
 		end,
 	})
 
-	--- Why not handle all logic in vim.onkey?
-	--- > Because we don't want it change the behavior of InsertCharPre autocmd
-	--- > If handle all on onkey we need to return "" for some case
-	--- and it will break the InsertCharPre autocmd
 	api.nvim_create_autocmd({ "BufEnter" }, {
 		group = GROUP,
 		callback = function(args)
@@ -236,6 +232,10 @@ M.setup = function()
 		end,
 	})
 
+	--- Why not handle all logic in vim.onkey?
+	--- > Because we don't want it change the behavior of InsertCharPre autocmd
+	--- > If handle all on onkey we need to return "" for some case
+	--- and it will break the InsertCharPre autocmd
 	api.nvim_create_autocmd({ "InsertEnter", "InsertLeave" }, {
 		group = GROUP,
 		callback = function(args)
