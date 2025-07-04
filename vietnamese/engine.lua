@@ -1,10 +1,11 @@
-local vim, pcall, require, type = vim, pcall, require, type
-local api = vim.api
+local vim, type = vim, type
+local api, v = vim.api, vim.v
 local nvim_win_get_cursor, nvim_win_set_cursor, nvim_buf_set_text, nvim_buf_get_text =
 	api.nvim_win_get_cursor, api.nvim_win_set_cursor, api.nvim_buf_set_text, api.nvim_buf_get_text
 
 local util = require("vietnamese.util")
 local config = require("vietnamese.config")
+
 local is_vietnamese_char, reverse_list, iter_chars, iter_chars_reverse =
 	util.is_vietnamese_char, util.reverse_list, util.iter_chars, util.iter_chars_reverse
 
@@ -136,6 +137,8 @@ function M.find_vnword_under_cursor(bufnr, row_0based, col_0based)
 end
 
 M.setup = function()
+	local bim_ok, bim_handler = pcall(require, "bim.handler")
+
 	local inserted_char = ""
 	local inserting = false
 	local cword = nil
@@ -157,7 +160,7 @@ M.setup = function()
 				return
 			elseif args.event == "InsertCharPre" then
 				inserting = true
-				inserted_char = vim.v.char
+				inserted_char = v.char
 				is_vowel = util.is_level1_vowel(inserted_char)
 
 				if is_diacritic_pressed(inserted_char, config.get_method_config()) or is_vowel then
@@ -169,6 +172,7 @@ M.setup = function()
 
 				return
 			elseif not inserting then
+				reset_state()
 				-- we are removing characters, so we don't need to process
 				return
 			end
@@ -219,8 +223,7 @@ M.setup = function()
 					-- Restore cursor position
 					nvim_win_set_cursor(0, { row, new_cursor_col })
 					-- intergrate with bim
-					local ok, bim_handler = pcall(require, "bim.handler")
-					if ok then
+					if bim_ok then
 						bim_handler.trigger_cursor_move_accepted()
 					end
 				end

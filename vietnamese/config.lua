@@ -3,6 +3,7 @@ local SUPPORTED_METHODS = require("vietnamese.constant").SUPPORTED_METHODS
 local METHOD_CONFIG_PATH = "vietnamese.method."
 
 local M = {}
+local current_method_config = nil
 
 local default_config = {
 	enabled = true,
@@ -12,6 +13,10 @@ local default_config = {
 
 M.is_enabled = function()
 	return default_config.enabled
+end
+
+M.set_ennabled = function(enabled)
+	default_config.enabled = enabled
 end
 
 M.toggle_enabled = function()
@@ -25,6 +30,7 @@ end
 
 function M.set_input_method(method)
 	default_config.input_method = method or "telex"
+	current_method_config = nil -- Reset cached method config
 end
 
 function M.set_user_config(user_config)
@@ -41,6 +47,11 @@ M.get_config = function()
 end
 
 function M.get_method_config()
+	if current_method_config then
+		--- use cache for fastest
+		return current_method_config
+	end
+
 	local current_method = default_config.input_method
 
 	local method_config = SUPPORTED_METHODS[current_method] and require(METHOD_CONFIG_PATH .. current_method)
@@ -50,8 +61,10 @@ function M.get_method_config()
 		require("vietnamese.notifier").error(
 			"Invalid method configuration for '" .. current_method .. "'. Please check your configuration."
 		)
-		return nil
+		method_config = require(METHOD_CONFIG_PATH .. next(SUPPORTED_METHODS)) -- Fallback to default method
 	end
+
+	current_method_config = method_config
 
 	return method_config
 end

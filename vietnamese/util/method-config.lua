@@ -1,5 +1,4 @@
 local util = require("vietnamese.util")
-local ipairs = ipairs
 local level = util.level
 
 local CONSTANT = require("vietnamese.constant")
@@ -20,9 +19,10 @@ end
 --- @param key string The key pressed by the user.
 --- @param method_config table The method configuration containing tone removal keys.
 --- @return boolean True if the key is a tone removal key, false otherwise.
-function M.is_tone_removal_key(key, method_config)
+local function is_tone_removal_key(key, method_config)
 	return method_config.tone_removal_keys[key:lower()]
 end
+M.is_tone_removal_key = is_tone_removal_key
 
 --- Get the tone diacritic for a given key and base character.
 --- If the key corresponds to a tone diacritic for the base character,
@@ -80,13 +80,19 @@ end
 M.get_shape_diacritic = get_shape_diacritic
 
 --- Get the diacritic for a given key and base character.
-function M.get_diacritic(key, base_char, method_config, strict)
-	local diacritic = get_tone_diacritic(key, base_char, method_config, strict)
-		or get_shape_diacritic(key, base_char, method_config, strict)
+--- This function checks if the key corresponds to a tone or shape diacritic for the base character.
+--- @param key string The key pressed by the user.
+--- @param affected_char string The base character to which the diacritic is applied.
+--- @param method_config table The method configuration containing tone and shape keys.
+--- @param strict boolean|nil If true, uses the base character as is; if false, uses the level 1 form of the base character.
+--- @return Diacritic|nil diacritic The diacritic ENUM_DIACRITIC
+function M.get_diacritic(key, affected_char, method_config, strict)
+	local diacritic = get_tone_diacritic(key, affected_char, method_config, strict)
+		or get_shape_diacritic(key, affected_char, method_config, strict)
 
 	if diacritic then
 		return diacritic
-	elseif M.is_tone_removal_key(key, method_config) and util.has_tone_marked(base_char) then
+	elseif is_tone_removal_key(key, method_config) and util.has_tone_marked(affected_char) then
 		return CONSTANT.Diacritic.Flat
 	end
 	return nil

@@ -275,8 +275,8 @@ function M.is_vietnamese_char(char)
 	if len == 1 then
 		-- ascii check
 		local byte = char:byte()
-		return byte >= 97 and byte <= 122 -- a-z
-			or byte >= 65 and byte <= 90 -- A-Z
+		return (byte > 96 and byte < 123) -- a-z
+			or (byte > 64 and byte < 91) -- A-Z
 	elseif len < 1 or len > 3 then
 		return false
 	end
@@ -482,6 +482,8 @@ function M.find_vowel_seq_bounds(chars, chars_size)
 					break
 				end
 			end
+
+			break
 		end
 	end
 	return first, last, first == last

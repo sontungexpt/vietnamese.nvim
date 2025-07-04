@@ -51,8 +51,8 @@ WordEngine.__index = WordEngine
 --- @field wlen integer Length of `word`
 --- @field raw string[] Original list of characters before modification
 --- @field rawlen integer Length of `raw`
---- @field inserted_idx integer? Index of the recently inserted character (if any)
---- @field inserted_char string? The character at the cursor position
+--- @field inserted_idx integer Index of the recently inserted character (if any)
+--- @field inserted_char string The character at the cursor position
 --- @field cursor_idx integer Current cursor position (1-based). If the cursor is at the end of the word, it is `raw_len + 1`.
 --- @field struct_state StructState State of the word structure analysis
 --- @field vowel_start integer (after analysis) Index of the start of the vowel cluster (1-based)
@@ -143,13 +143,13 @@ function WordEngine:is_potential_vnword()
 end
 
 --- Checks if the word is potential to apply diacritic
---- @param method_config table|nil the method configuration to use for checking
+--- @param method_config table the method configuration to use for checking
 --- @return boolean true if the diacritic can be applied, false otherwise
 function WordEngine:is_potential_diacritic_key(method_config)
 	local p = _privates[self]
 	local raw, inserted_char = p.raw, p.inserted_char
 
-	for i = 1, p.inserted_idx - 1 do
+	for i = p.inserted_idx - 1, 1, -1 do
 		if mc_util.get_diacritic(inserted_char, raw[i], method_config) then
 			return true
 		end
@@ -162,7 +162,7 @@ end
 --- @return string the character at the cursor position
 function WordEngine:inserted_char()
 	local p = _privates[self]
-	return p.inserted_char or p.raw[p.inserted_idx] or ""
+	return p.inserted_char or ""
 end
 
 --- Copies the raw character list to the word character list
@@ -653,8 +653,10 @@ function WordEngine:processes_diacritic(method_config)
 	if self:analyze_structure() == StructInvalid then
 		return false
 	end
-	-- vim.notify(vim.inspect(_privates[self]), vim.log.levels.DEBUG, { title = "WordEngine" })
-	local inserted_char = self:inserted_char()
+	local p = _privates[self]
+	local inserted_char = p.inserted_char
+
+	---@cast inserted_char string
 	if mc_util.is_tone_removal_key(inserted_char, method_config) then
 		return remove_tone(self, method_config)
 	elseif mc_util.is_shape_key(inserted_char, method_config) then
