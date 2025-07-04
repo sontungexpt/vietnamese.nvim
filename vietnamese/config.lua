@@ -1,6 +1,10 @@
 local type = type
-local SUPPORTED_METHODS = require("vietnamese.constant").SUPPORTED_METHODS
+
 local METHOD_CONFIG_PATH = "vietnamese.method."
+local SUPPORTED_METHODS = {
+	telex = true,
+	vni = true,
+}
 
 local M = {}
 local curr_method_config = nil

@@ -223,9 +223,6 @@ M.setup = function()
 	api.nvim_create_autocmd({ "BufEnter" }, {
 		group = GROUP,
 		callback = function(args)
-			if not config.is_enabled() then
-				return
-			end
 			local bo = vim.bo[args.buf]
 			buf_disabled = config.is_excluded(bo.filetype, bo.buftype)
 		end,
@@ -235,12 +232,18 @@ M.setup = function()
 		group = GROUP,
 		callback = function(args)
 			local event, bufnr = args.event, args.buf
-
 			if config.is_enabled() and not buf_disabled and event == "InsertEnter" then
 				---@diagnostic disable-next-line: unused-local
 				vim.on_key(function(key, typed)
+					if not api.nvim_buf_is_valid(bufnr) then
+						reset_state()
+						return
+					end
+
 					is_vowel_pressed = util.is_level1_vowel(key)
-					delete_pressed = key == "\b" or key == "\x7f" -- Check if the key is a backspace or delete
+
+					-- Check if the key is a backspace or delete
+					delete_pressed = key == "\b" or key == "\x7f"
 
 					if is_diacritic_pressed(key, config.get_method_config()) or is_vowel_pressed then
 						inserted_char = key

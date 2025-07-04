@@ -50,10 +50,6 @@ local DIACRITIC_HORIZONTAL_STROKE = Diacritic.HorizontalStroke
 
 M = {
 	Diacritic = Diacritic,
-	SUPPORTED_METHODS = {
-		telex = true,
-		vni = true,
-	},
 	--- @type table<string, number>
 	--- VOWEL_ACCENT_PRIORITY maps Vietnamese vowels with accents to their priority.
 	VOWEL_PRIORITY = {
