@@ -3,14 +3,21 @@ local SUPPORTED_METHODS = require("vietnamese.constant").SUPPORTED_METHODS
 local METHOD_CONFIG_PATH = "vietnamese.method."
 
 local M = {}
-local current_method_config = nil
+local curr_method_config = nil
 
 local default_config = {
 	enabled = true,
 	input_method = "telex", -- Default input method
 	excluded = {
-		filetypes = { "help" }, -- File types to exclude
-		buftypes = { "nowrite", "quickfix", "prompt" }, -- Buffer types to excludek
+		filetypes = {
+			"nvimtree", -- File types to exclude
+			"help",
+		}, -- File types to exclude
+		buftypes = {
+			"nowrite",
+			"quickfix",
+			"prompt",
+		}, -- Buffer types to excludek
 	},
 	custom_methods = {}, -- Custom input methods
 }
@@ -34,7 +41,7 @@ end
 
 function M.set_input_method(method)
 	default_config.input_method = method or "telex"
-	current_method_config = nil -- Reset cached method config
+	curr_method_config = nil -- Reset cached method config
 end
 
 function M.set_user_config(user_config)
@@ -51,9 +58,9 @@ M.get_config = function()
 end
 
 function M.get_method_config()
-	if current_method_config then
+	if curr_method_config then
 		--- use cache for fastest
-		return current_method_config
+		return curr_method_config
 	end
 
 	local current_method = default_config.input_method
@@ -68,7 +75,7 @@ function M.get_method_config()
 		method_config = require(METHOD_CONFIG_PATH .. next(SUPPORTED_METHODS)) -- Fallback to default method
 	end
 
-	current_method_config = method_config
+	curr_method_config = method_config
 
 	return method_config
 end

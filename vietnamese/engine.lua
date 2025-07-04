@@ -191,11 +191,13 @@ M.setup = function()
 	local bim_ok, bim_handler = pcall(require, "bim.handler")
 
 	local inserted_char = ""
-	local cword, cwlen = nil, 0
 	local inserted_idx = 0
+	local inserting = false
+	local delete_pressed = false
+
+	local cword, cwlen = nil, 0
 	local is_vowel_pressed = false
 	local buf_disabled = false
-	local deleting = false
 
 	local reset_state = function()
 		cword, cwlen, inserted_idx = nil, 0, 0
@@ -216,6 +218,8 @@ M.setup = function()
 
 	--- Why not handle all logic in vim.onkey?
 	--- > Because we don't want it change the behavior of InsertCharPre autocmd
+	--- > If handle all on onkey we need to return "" for some case
+	--- and it will break the InsertCharPre autocmd
 	api.nvim_create_autocmd({ "BufEnter" }, {
 		group = GROUP,
 		callback = function(args)
@@ -230,17 +234,18 @@ M.setup = function()
 	api.nvim_create_autocmd({ "InsertEnter", "InsertLeave" }, {
 		group = GROUP,
 		callback = function(args)
-			local event = args.event
+			local event, bufnr = args.event, args.buf
+
 			if config.is_enabled() and not buf_disabled and event == "InsertEnter" then
 				---@diagnostic disable-next-line: unused-local
 				vim.on_key(function(key, typed)
 					is_vowel_pressed = util.is_level1_vowel(key)
-					deleting = key == "\b" or key == "\x7f" -- Check if the key is a backspace or delete
+					delete_pressed = key == "\b" or key == "\x7f" -- Check if the key is a backspace or delete
 
 					if is_diacritic_pressed(key, config.get_method_config()) or is_vowel_pressed then
 						inserted_char = key
 						local pos = nvim_win_get_cursor(0)
-						cword, cwlen, inserted_idx = find_vnword_under_cursor(args.buf, pos[1] - 1, pos[2])
+						cword, cwlen, inserted_idx = find_vnword_under_cursor(bufnr, pos[1] - 1, pos[2])
 					else
 						reset_state()
 					end
@@ -251,15 +256,25 @@ M.setup = function()
 			end
 		end,
 	})
-	api.nvim_create_autocmd({ "TextChangedI" }, {
+	api.nvim_create_autocmd({
+		"InsertCharPre",
+		"TextChangedI",
+	}, {
 		group = GROUP,
 		callback = function(args)
 			if not config.is_enabled() or buf_disabled then
 				return
-			elseif deleting then
+			elseif args.event == "InsertCharPre" then
+				inserting = v.char == inserted_char
+				-- make sure that we are inserted
+				-- and does not have any plugins change the inserted behavior
+				return
+			elseif not inserting and delete_pressed then
 				-- not implemented yet
 				return
-			elseif inserted_char ~= "" then
+			else
+				inserting = false
+
 				util.benchmark(function()
 					-- nothing to handle
 					if not cword then
