@@ -138,6 +138,7 @@ end
 
 M.setup = function()
 	local bim_ok, bim_handler = pcall(require, "bim.handler")
+	local group = api.nvim_create_augroup("VietnameseEngine", { clear = true })
 
 	local inserted_char = ""
 	local inserting = false
@@ -145,18 +146,53 @@ M.setup = function()
 	local cwlen = 0
 	local inserted_idx = 0
 	local is_vowel = false
+	local local_disabled = false
 
 	local reset_state = function()
 		cword, cwlen, inserted_idx = nil, 0, 0
 		inserted_char = ""
 	end
+	api.nvim_create_autocmd({ "FocusGained", "FocusLost" }, {
+		group = group,
+		callback = function(args)
+			local event = args.event
+			if event == "FocusGained" then
+				return true
+			else
+				return false
+			end
+		end,
+	})
+
+	api.nvim_create_autocmd({ "BufEnter", "BufLeave" }, {
+		group = group,
+		callback = function(args)
+			local event = args.event
+			if not config.is_enabled() then
+				return
+			elseif event == "BufEnter" then
+				local buftype = api.nvim_get_option_value("buftype", { buf = args.buf })
+				local filetype = api.nvim_get_option_value("filetype", { buf = args.buf })
+
+				if
+					not local_disabled
+					and (config.is_excluded_buftype(buftype) or config.is_excluded_filetype(filetype))
+				then
+					local_disabled = true
+				end
+			elseif event == "BufLeave" then
+				local_disabled = false
+			end
+		end,
+	})
 
 	api.nvim_create_autocmd({
 		"InsertCharPre",
 		"TextChangedI",
 	}, {
+		group = group,
 		callback = function(args)
-			if not config.is_enabled() then
+			if not config.is_enabled() or local_disabled then
 				return
 			elseif args.event == "InsertCharPre" then
 				inserting = true

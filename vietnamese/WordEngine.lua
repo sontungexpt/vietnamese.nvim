@@ -166,14 +166,21 @@ function WordEngine:inserted_char()
 end
 
 --- Copies the raw character list to the word character list
-function WordEngine:restore_raw(update)
+function WordEngine:restore_raw(ovverides)
 	local p = _privates[self]
 	local word, word_len, raw, raw_len = p.word, p.wlen, p.raw, p.rawlen
 	local stop = word_len > raw_len and word_len or raw_len
 
-	for i = 1, stop do
-		word[i] = update[i] or raw[i]
+	if not ovverides or next(ovverides) == nil then
+		for i = 1, stop do
+			word[i] = raw[i]
+		end
+	else
+		for i = 1, stop do
+			word[i] = ovverides[i] or raw[i]
+		end
 	end
+
 	-- update new len
 	p.wlen = raw_len
 end
@@ -211,7 +218,7 @@ function WordEngine:update_tone_pos(method_config)
 		return false
 	end
 
-	local vowel, new_idx = self:find_tone_mark_position("", true)
+	local vowel, new_idx = self:find_tone_pos("", true)
 	if not vowel or new_idx == tidx then
 		return false
 	end
@@ -235,7 +242,7 @@ end
 --- @param force_recheck boolean|nil whether to force recompute the position even it only had tone marked already
 --- @return string|nil the main vowel character if found, nil otherwise
 --- @return integer the index of the main vowel character if found, nil otherwise
-function WordEngine:find_tone_mark_position(style, force_recheck)
+function WordEngine:find_tone_pos(style, force_recheck)
 	self:analyze_structure()
 
 	local p = _privates[self]
@@ -342,7 +349,7 @@ end
 ---
 --- @note If the consonant cluster overlaps with the vowel (e.g. "qu", "qo"), it is considered
 --- valid and the first vowel index is adjusted by 1.
-local function detect_onset_cluster(chars, vowel_start, vowel_end)
+local function detect_onset(chars, vowel_start, vowel_end)
 	local cluster_len = vowel_start - 1
 	if cluster_len == 0 then
 		return true, cluster_len
@@ -368,7 +375,7 @@ end
 --- @param vowel_end integer The index of the last vowel (1-based)
 --- @return integer new_vowel_start The adjusted index of the first vowel (1-based)
 --- @return integer new_vowel_end The index of the last vowel (1-based)
-local function fix_onset_vowel_conflict(onset_end, vowel_start, vowel_end)
+local function fix_onset_vowel_collision(onset_end, vowel_start, vowel_end)
 	if onset_end < vowel_start then
 		return vowel_start, vowel_end
 	elseif onset_end + 1 > vowel_end then
@@ -382,7 +389,7 @@ end
 --- @param chars_size integer The total length of the character table
 --- @param vowel_end integer The index of the first vowel (1-based)
 --- @return boolean is_valid True if the consonant cluster is valid, false otherwise
-local function validate_coda_cluster(chars, chars_size, vowel_end)
+local function validate_coda(chars, chars_size, vowel_end)
 	-- assert(vowel_end >= 1 and vowel_end <= chars_size, "Invalid last vowel index")
 	local cluster_len = chars_size - vowel_end
 	if cluster_len == 0 then
@@ -430,19 +437,19 @@ function WordEngine:analyze_structure(force)
 		p.struct_state = StructShapeReady
 	end
 
-	local valid, onset_end = detect_onset_cluster(word, vs, ve)
+	local valid, onset_end = detect_onset(word, vs, ve)
 	if not valid then
 		p.struct_state = StructInvalid
 		return p.struct_state
 	end
 
-	vs, ve = fix_onset_vowel_conflict(onset_end, vs, ve)
+	vs, ve = fix_onset_vowel_collision(onset_end, vs, ve)
 	if vs < 1 then
 		p.struct_state = StructInvalid
 		return p.struct_state
 	end
 
-	if not validate_coda_cluster(word, wlen, ve) then
+	if not validate_coda(word, wlen, ve) then
 		p.struct_state = StructInvalid
 		return p.struct_state
 	end
@@ -481,7 +488,7 @@ local function processes_tone(self, method_config)
 		return false
 	end
 
-	local main_vowel, tidx = self:find_tone_mark_position("")
+	local main_vowel, tidx = self:find_tone_pos("")
 
 	if not main_vowel then
 		return false
