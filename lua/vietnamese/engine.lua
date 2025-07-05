@@ -197,11 +197,13 @@ M.setup = function()
 
 	local cword, cwlen = nil, 0
 	local is_vowel_pressed = false
-	local buf_disabled = false
+	local is_diacritic_key_pressed = false
 
 	local reset_state = function()
 		cword, cwlen, inserted_idx = nil, 0, 0
 		inserted_char = ""
+		is_vowel_pressed = false
+		is_diacritic_key_pressed = false
 	end
 
 	local function register_onkey(cb, opts)
@@ -224,45 +226,22 @@ M.setup = function()
 		end,
 	})
 
-	api.nvim_create_autocmd({ "BufEnter" }, {
-		group = GROUP,
-		callback = function(args)
-			local bo = vim.bo[args.buf]
-			buf_disabled = config.is_excluded(bo.filetype, bo.buftype)
-		end,
-	})
-
 	--- Why not handle all logic in vim.onkey?
 	--- > Because we don't want it change the behavior of InsertCharPre autocmd
 	--- > If handle all on onkey we need to return "" for some case
 	--- and it will break the InsertCharPre autocmd
+	--- Not only that it will have more strange behavior with buffer because the onkey may execute
+	--- before buffer is ready
 	api.nvim_create_autocmd({ "InsertEnter", "InsertLeave" }, {
 		group = GROUP,
 		callback = function(args)
-			local event, bufnr = args.event, args.buf
-			if config.is_enabled() and not buf_disabled and event == "InsertEnter" then
+			if config.is_enabled() and config.is_buf_enabled(args.buf) and args.event == "InsertEnter" then
 				---@diagnostic disable-next-line: unused-local
 				register_onkey(function(key, typed)
-					if not api.nvim_buf_is_valid(bufnr) then
-						reset_state()
-						return
-					end
-
-					is_vowel_pressed = util.is_level1_vowel(key)
-
-					-- Check if the key is a backspace or delete
+					inserted_char = key
 					delete_pressed = key == "\b" or key == "\x7f"
-
-					if is_diacritic_pressed(key, config.get_method_config()) or is_vowel_pressed then
-						inserted_char = key
-						local pos = nvim_win_get_cursor(0)
-						cword, cwlen, inserted_idx = find_vnword_under_cursor(bufnr, pos[1] - 1, pos[2])
-					else
-						reset_state()
-					end
 				end)
 			else
-				-- unregister the key handler
 				unregister_onkey()
 			end
 		end,
@@ -273,10 +252,22 @@ M.setup = function()
 	}, {
 		group = GROUP,
 		callback = function(args)
-			if not config.is_enabled() or buf_disabled then
+			local bufnr = args.buf
+			if not config.is_enabled() or not config.is_buf_enabled(bufnr) then
 				return
 			elseif args.event == "InsertCharPre" then
-				inserting = v.char == inserted_char
+				if v.char == inserted_char then
+					inserting = true
+					is_vowel_pressed = util.is_level1_vowel(inserted_char)
+					is_diacritic_key_pressed = is_diacritic_pressed(inserted_char, config.get_method_config())
+
+					if is_diacritic_key_pressed or is_vowel_pressed then
+						local pos = nvim_win_get_cursor(0)
+						cword, cwlen, inserted_idx = find_vnword_under_cursor(bufnr, pos[1] - 1, pos[2])
+						return
+					end
+				end
+				reset_state()
 				-- make sure that we are inserted
 				-- and does not have any plugins change the inserted behavior
 				return
@@ -301,7 +292,11 @@ M.setup = function()
 				local word_engine = require("vietnamese.WordEngine"):new(cword, cwlen, inserted_char, inserted_idx)
 
 				-- check the diacritic key first
-				if word_engine:is_potential_diacritic_key(method_config) and word_engine:is_potential_vnword() then
+				if
+					is_diacritic_key_pressed
+					and word_engine:is_potential_diacritic_key(method_config)
+					and word_engine:is_potential_vnword()
+				then
 					changed = word_engine:processes_diacritic(method_config)
 				end
 

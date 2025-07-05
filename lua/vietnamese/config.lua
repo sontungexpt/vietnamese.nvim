@@ -30,6 +30,27 @@ M.is_enabled = function()
 	return default_config.enabled
 end
 
+--- Check if a buffer is enabled for Vietnamese input
+--- @param  bufnr integer Buffer number to Check
+--- @return boolean True if the buffer is enabled, false otherwise
+M.is_buf_enabled = function(bufnr)
+	local bo = vim.bo[bufnr]
+	local filetype, buftype = bo.filetype, bo.buftype
+	local excluded = default_config.excluded or {}
+	for _, ft in ipairs(excluded.filetypes or {}) do
+		if filetype == ft then
+			return false
+		end
+	end
+	for _, bt in ipairs(excluded.buftypes or {}) do
+		if buftype == bt then
+			return false
+		end
+	end
+
+	return true
+end
+
 M.set_ennabled = function(enabled)
 	default_config.enabled = enabled
 end
@@ -48,13 +69,39 @@ function M.set_input_method(method)
 	curr_method_config = nil -- Reset cached method config
 end
 
-function M.set_user_config(user_config)
-	if type(user_config) == "table" then
-		for key, value in pairs(user_config) do
-			default_config[key] = value
-		end
+local function merge_user_config(defaults, overrides)
+	-- Handle nil cases immediately
+	if overrides == nil then
+		return defaults
+	elseif defaults == nil then
+		return overrides
 	end
-	return default_config
+
+	local default_type = type(defaults)
+	local override_type = type(overrides)
+
+	-- Handle type mismatch
+	if default_type ~= override_type then
+		return defaults
+	-- Handle non-tables
+	elseif default_type ~= "table" then
+		return overrides
+	end
+
+	-- Handle array-like tables
+	if defaults[1] ~= nil then
+		return overrides
+	end
+
+	-- Deep merge dictionary-like tables
+	for key, value in pairs(overrides) do
+		defaults[key] = merge_user_config(defaults[key], value)
+	end
+
+	return defaults
+end
+M.set_user_config = function(user_config)
+	merge_user_config(default_config, user_config)
 end
 
 M.get_config = function()
@@ -91,22 +138,6 @@ function M.is_excluded_filetype(filetype)
 
 	local excludes = default_config.excluded.filetypes or {}
 	return vim.tbl_contains(excludes, filetype)
-end
-
-M.is_excluded = function(filetype, buftype)
-	local excluded = default_config.excluded or {}
-	if type(filetype) == "string" then
-		if vim.tbl_contains(excluded.filetypes or {}, filetype) then
-			return true
-		end
-	end
-
-	if type(buftype) == "string" then
-		if vim.tbl_contains(excluded.buftypes or {}, buftype) then
-			return true
-		end
-	end
-	return false
 end
 
 function M.is_excluded_buftype(buftype)
