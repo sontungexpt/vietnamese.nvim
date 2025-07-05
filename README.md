@@ -69,10 +69,57 @@ require("vietnamese").setup({
             "prompt",
         }, -- Loại buffer types
     },
-    custom_methods = {
+    custom_methods =
         -- Tự tạo riêng intput methods của mình
         -- Tạm thời mọi người đừng tự tạo bởi vì mình chưa test (này edge case nên để sau)
-        -- Còn néu muôn tạo thì mọi người làm gi
+        -- Còn néu muôn tạo thì mọi người làm giống trong file config của telex là được
+
+        name = {
+
+            -- nhớ import ENUM_DIACRITIC from vietnamese.constant trên đầu file config để lấy enum
+            -- local ENUM_DIACRITIC = require("vietnamese.constant").Diacritic
+
+            tone_keys = {
+                ["s"] = ENUM_DIACRITIC.Acute,
+                ["f"] = ENUM_DIACRITIC.Grave,
+                ["r"] = ENUM_DIACRITIC.Hook,
+                ["x"] = ENUM_DIACRITIC.Tilde,
+                ["j"] = ENUM_DIACRITIC.Dot,
+            },
+            tone_removal_keys = {
+                ["z"] = true,
+            },
+            shape_keys = {
+                w = {
+                    a = ENUM_DIACRITIC.Breve,
+                    o = ENUM_DIACRITIC.Horn,
+                    u = ENUM_DIACRITIC.Horn,
+                    e = ENUM_DIACRITIC.Circumflex,
+                },
+
+                a = {
+                    a = ENUM_DIACRITIC.Circumflex,
+                },
+
+                e = {
+                    e = ENUM_DIACRITIC.Circumflex,
+                },
+
+                o = {
+                    o = ENUM_DIACRITIC.Circumflex,
+                },
+
+                d = {
+                    d = ENUM_DIACRITIC.HorizontalStroke,
+                },
+            },
+
+            -- Check if a character is a valid input character to make a Vietnamese character
+            --
+            is_diacritic_pressed = function(char)
+                return char:lower():match("[sfrxjzawdeo]") ~= nil
+            end,
+        }
 
 
     },
