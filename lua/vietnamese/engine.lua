@@ -281,8 +281,15 @@ M.setup = function()
 				-- make sure InsertedCharPre and TextChangedI in same buffer
 				reset_state()
 				return
-			elseif not inserting and delete_pressed then
-				-- not implemented yet
+			elseif not inserting then
+				-- why not merge with above condiction
+				-- To ensures that if not inserting it will jump to this block
+				-- If merge maybe it will jump to the inserting block incorrectly
+				if delete_pressed then
+					-- check again to make sure it is delete key
+					-- not implemented yet
+					return
+				end
 				return
 			else
 				inserting = false
