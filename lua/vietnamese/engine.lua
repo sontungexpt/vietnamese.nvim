@@ -194,6 +194,7 @@ M.setup = function()
 	local inserted_idx = 0
 	local inserting = false
 	local delete_pressed = false
+	local working_bufnr = -1
 
 	local cword, cwlen = nil, 0
 	local is_vowel_pressed = false
@@ -204,6 +205,7 @@ M.setup = function()
 		inserted_char = ""
 		is_vowel_pressed = false
 		is_diacritic_key_pressed = false
+		working_bufnr = -1
 	end
 
 	local function register_onkey(cb, opts)
@@ -261,6 +263,7 @@ M.setup = function()
 			elseif args.event == "InsertCharPre" then
 				if v.char == inserted_char then
 					inserting = true
+					working_bufnr = bufnr
 					is_vowel_pressed = util.is_level1_vowel(inserted_char)
 					is_diacritic_key_pressed = is_diacritic_pressed(inserted_char, config.get_method_config())
 
@@ -273,6 +276,10 @@ M.setup = function()
 				reset_state()
 				-- make sure that we are inserted
 				-- and does not have any plugins change the inserted behavior
+				return
+			elseif working_bufnr ~= bufnr then
+				-- make sure InsertedCharPre and TextChangedI in same buffer
+				reset_state()
 				return
 			elseif not inserting and delete_pressed then
 				-- not implemented yet
