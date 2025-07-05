@@ -214,11 +214,14 @@ M.setup = function()
 		vim.on_key(nil, NAMESPACE)
 	end
 
-	api.nvim_create_autocmd({ "FocusGained", "FocusLost" }, {
+	api.nvim_create_autocmd({ "VimEnter", "FocusGained", "FocusLost", "VimLeave" }, {
 		group = GROUP,
 		callback = function(args)
+			if not config.is_enabled() then
+				return
+			end
 			local event = args.event
-			if event == "FocusGained" then
+			if event == "FocusGained" or event == "VimEnter" then
 				disable_global_ime()
 			else
 				enable_global_ime()
