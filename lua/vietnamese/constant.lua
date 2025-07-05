@@ -287,6 +287,8 @@ M = {
 		["ay"] = { 0 },
 		["ây"] = { 0 },
 
+		["io"] = false, --transitional for gio, not a valid vowel
+		["iơ"] = false, --transitional for giờ, not a valid vowel
 		["ia"] = { 0 },
 		["ie"] = false, --transitional, not a valid vowel
 		["iê"] = { 1 },
@@ -361,6 +363,7 @@ M = {
 		["d"] = true,
 		["đ"] = true,
 		["g"] = true,
+		["j"] = true, --teen type for gi
 		["gh"] = true,
 		["gi"] = true,
 		["h"] = true,

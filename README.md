@@ -69,7 +69,13 @@ require("vietnamese").setup({
             "prompt",
         }, -- Loại buffer types
     },
-    custom_methods = {}, -- Tự tạo riêng intput methods của mình
+    custom_methods = {
+        -- Tự tạo riêng intput methods của mình
+        -- Tạm thời mọi người đừng tự tạo bởi vì mình chưa test (này edge case nên để sau)
+        -- Còn néu muôn tạo thì mọi người làm gi
+
+
+    },
 })
 
 ```
