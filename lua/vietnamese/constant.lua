@@ -288,6 +288,7 @@ M = {
 		["ây"] = { 0 },
 
 		["io"] = false, --transitional for gio, not a valid vowel
+		["iô"] = false, --transitional for giố, not a valid vowel
 		["iơ"] = false, --transitional for giờ, not a valid vowel
 		["ia"] = { 0 },
 		["ie"] = false, --transitional, not a valid vowel
