@@ -357,16 +357,16 @@ local function detect_onset(chars, vowel_start, vowel_end)
 		return false, cluster_len
 	elseif cluster_len == 1 then
 		local char1 = chars[1]
-		if vowel_end > vowel_start and ONSETS[char1 .. chars[2]] then
+		if vowel_end > vowel_start and ONSETS[(char1 .. chars[2]):lower()] then
 			-- Special case: consonant overlaps with vowel
 			-- e.g "qu", "gi"
 			return true, vowel_start
 		end
-		return ONSETS[char1] ~= nil, 0
+		return ONSETS[char1:lower()] ~= nil, 0
 	elseif cluster_len == 2 then
-		return ONSETS[chars[1] .. chars[2]] ~= nil, 0
+		return ONSETS[(chars[1] .. chars[2]):lower()] ~= nil, 0
 	end
-	return ONSETS[chars[1] .. chars[2] .. chars[3]] ~= nil, 0
+	return ONSETS[(chars[1] .. chars[2] .. chars[3]):lower()] ~= nil, 0
 end
 
 --- Fix the onset and vowel conflicts
@@ -395,9 +395,9 @@ local function validate_coda(chars, chars_size, vowel_end)
 	if cluster_len == 0 then
 		return true
 	elseif cluster_len == 1 then
-		return CODAS[chars[vowel_end + 1]] ~= nil
+		return CODAS[(chars[vowel_end + 1]):lower()] ~= nil
 	elseif cluster_len == 2 then
-		return CODAS[chars[vowel_end + 1] .. chars[vowel_end + 2]] ~= nil
+		return CODAS[(chars[vowel_end + 1] .. chars[vowel_end + 2]):lower()] ~= nil
 	end
 	return false
 end
@@ -566,10 +566,10 @@ local function processes_shape(self, method_config)
 		local e1_c, e2_c = e1[2], e2[2]
 		local e1_shape, e2_shape = e1[3], e2[3]
 
-		local is_dual_horn_uo = e1_shape == Diacritic.Horn
+		local is_dual_horn_uo = e2_idx < word_len -- must have the coda
+			and e2_idx - e1_idx == 1 -- must be adjacent
+			and e1_shape == Diacritic.Horn
 			and e2_shape == Diacritic.Horn
-			and e2_idx < word_len -- must have the coda
-			and e2_idx - e1_idx == 1
 			and level(e1_c, 1) == "u"
 			and level(e2_c, 1) == "o"
 
