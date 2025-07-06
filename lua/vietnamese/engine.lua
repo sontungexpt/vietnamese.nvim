@@ -20,7 +20,8 @@ local enable_global_ime = function()
 	-- ibus
 	vim.system({
 		"ibus",
-		"exit",
+		"engine",
+		"BambooUs",
 	}, {}, function(out)
 		if out and out.code == 0 then
 			require("vietnamese.notifier").info("Ibus has been disabled.")
@@ -44,7 +45,8 @@ local disable_global_ime = function()
 	--- ibus
 	vim.system({
 		"ibus",
-		"start",
+		"engine",
+		"Bamboo",
 	}, {}, function(out)
 		if out and out.code == 0 then
 			require("vietnamese.notifier").info("Ibus has been enabled.")
