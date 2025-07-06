@@ -16,56 +16,6 @@ local WORST_CASE_WORD_LEN = THRESHOLD_WORD_LEN * 2 + 2
 
 local M = {}
 
-local enable_global_ime = function()
-	-- ibus
-	vim.system({
-		"ibus",
-		"engine",
-		"BambooUs",
-	}, {}, function(out)
-		if out and out.code == 0 then
-			require("vietnamese.notifier").info("Ibus has been disabled.")
-		end
-	end)
-
-	-- -- fcitx5
-	-- vim.system({
-	-- 	"fcitx5",
-	-- 	"disable",
-	-- }, {}, function(out)
-	-- 	if out and out.code == 0 then
-	-- 		require("vietnamese.notifier").info(
-	-- 			"Fcitx5 has been disabled. You can re-enable it by running `fcitx5 enable` in your terminal."
-	-- 		)
-	-- 	end
-	-- end)
-end
-
-local disable_global_ime = function()
-	--- ibus
-	vim.system({
-		"ibus",
-		"engine",
-		"Bamboo",
-	}, {}, function(out)
-		if out and out.code == 0 then
-			require("vietnamese.notifier").info("Ibus has been enabled.")
-		end
-	end)
-
-	-- -- fcitx5
-	-- vim.system({
-	-- 	"fcitx5",
-	-- 	"enable",
-	-- }, {}, function(out)
-	-- 	if out and out.code == 0 then
-	-- 		require("vietnamese.notifier").info(
-	-- 			"Fcitx5 has been enabled. You can disable it by running `:VietnameseDisableFcitx5`."
-	-- 		)
-	-- 	end
-	-- end)
-end
-
 --- Check if a character is a valid input character for the current method
 local function is_diacritic_pressed(char, method_config)
 	if type(method_config.is_diacritic_pressed) == "function" then
@@ -190,6 +140,7 @@ M.find_vnword_under_cursor = find_vnword_under_cursor
 M.setup = function()
 	local GROUP = api.nvim_create_augroup("VietnameseEngine", { clear = true })
 	local NAMESPACE = api.nvim_create_namespace("VietnameseEngine")
+	local system_ime = require("vietnamese.system-ime")
 	local bim_ok, bim_handler = pcall(require, "bim.handler")
 
 	local inserted_char = ""
@@ -218,17 +169,25 @@ M.setup = function()
 		vim.on_key(nil, NAMESPACE)
 	end
 
-	api.nvim_create_autocmd({ "VimEnter", "FocusGained", "FocusLost", "VimLeave" }, {
+	--- disable system IME on startup
+	system_ime.disable()
+
+	api.nvim_create_autocmd({
+		--  "VimEnter", -- no need because we call in setup functoin
+		"FocusGained",
+		"FocusLost",
+		"VimLeave",
+	}, {
 		group = GROUP,
 		callback = function(args)
 			if not config.is_enabled() then
 				return
 			end
 			local event = args.event
-			if event == "FocusGained" or event == "VimEnter" then
-				disable_global_ime()
+			if event == "FocusGained" then
+				system_ime.disable()
 			else
-				enable_global_ime()
+				system_ime.enable()
 			end
 		end,
 	})

@@ -53,11 +53,15 @@ end
 
 M.set_ennabled = function(enabled)
 	default_config.enabled = enabled
+	if enabled then
+		-- disable system IME if it was enabled
+		require("vietnamese.system-ime").disable()
+	end
+	return enabled
 end
 
 M.toggle_enabled = function()
-	default_config.enabled = not default_config.enabled
-	return default_config.enabled
+	return M.set_ennabled(not default_config.enabled)
 end
 
 function M.get_input_method()
