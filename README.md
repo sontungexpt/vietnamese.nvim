@@ -28,7 +28,8 @@
     dependencies = {
         -- if you want to map jj or any key to escape
         "sontungexpt/bim.nvim",
-    },nvim-web-devicons
+        "nvim-web-devicons"
+    },
     event = "InsertEnter",
     config = function(
         require("vietnamese").setup()
