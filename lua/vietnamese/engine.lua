@@ -182,12 +182,10 @@ M.setup = function()
 		callback = function(args)
 			if not config.is_enabled() then
 				return
-			end
-			local event = args.event
-			if event == "FocusGained" then
+			elseif args.event == "FocusGained" then
 				system_ime.disable()
 			else
-				system_ime.enable()
+				system_ime.restore()
 			end
 		end,
 	})

@@ -630,10 +630,21 @@ function M.caculate_distance(start_idex, end_idx)
 end
 
 --- Check if a character is "d" or "đ" or "D" or "Đ"
---- @param c string: The character to check
+--- @param char string: The character to check
 --- @return boolean: True if the character is "d" or "đ" or "D" or "Đ", false otherwise
-function M.is_d(c)
-	return c == "d" or c == "D" or c == "đ" or c == "Đ"
+function M.is_d(char)
+	return char == "d" or char == "D" or char == "đ" or char == "Đ"
+end
+
+--- Checks if u is a Vietnamese "u" or "ư" and o is a Vietnamese "o", "ô", or "ơ"
+--- @param u string: The first character to check
+--- @param o string: The second character to check
+--- @return boolean: True if u is a Vietnamese "u" or "ư" and o is a Vietnamese "o", "ô", or "ơ", false otherwise
+function M.is_uo(u, o)
+	if u == "u" or u == "ư" or u == "U" or u == "Ư" then
+		return o == "o" or o == "ô" or o == "ơ" or o == "O" or o == "Ô" or o == "Ơ"
+	end
+	return false
 end
 
 function M.benchmark(func, ...)

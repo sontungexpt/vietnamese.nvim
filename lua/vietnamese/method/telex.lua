@@ -1,12 +1,13 @@
-local ENUM_DIACRITIC = require("vietnamese.constant").Diacritic
+local Diacritic = require("vietnamese.constant").Diacritic
 
+---@type MethodConfig
 local M = {
 	tone_keys = {
-		["s"] = ENUM_DIACRITIC.Acute,
-		["f"] = ENUM_DIACRITIC.Grave,
-		["r"] = ENUM_DIACRITIC.Hook,
-		["x"] = ENUM_DIACRITIC.Tilde,
-		["j"] = ENUM_DIACRITIC.Dot,
+		["s"] = Diacritic.Acute,
+		["f"] = Diacritic.Grave,
+		["r"] = Diacritic.Hook,
+		["x"] = Diacritic.Tilde,
+		["j"] = Diacritic.Dot,
 	},
 	tone_removal_keys = {
 		"z",
@@ -20,26 +21,26 @@ local M = {
 		-- d = { d = ENUM_DIACRITIC.HORIZONTAL_STROKE },
 
 		w = {
-			a = ENUM_DIACRITIC.Breve,
-			o = ENUM_DIACRITIC.Horn,
-			u = ENUM_DIACRITIC.Horn,
-			e = ENUM_DIACRITIC.Circumflex,
+			a = Diacritic.Breve,
+			o = Diacritic.Horn,
+			u = Diacritic.Horn,
+			e = Diacritic.Circumflex,
 		},
 
 		a = {
-			a = ENUM_DIACRITIC.Circumflex,
+			a = Diacritic.Circumflex,
 		},
 
 		e = {
-			e = ENUM_DIACRITIC.Circumflex,
+			e = Diacritic.Circumflex,
 		},
 
 		o = {
-			o = ENUM_DIACRITIC.Circumflex,
+			o = Diacritic.Circumflex,
 		},
 
 		d = {
-			d = ENUM_DIACRITIC.HorizontalStroke,
+			d = Diacritic.HorizontalStroke,
 		},
 	},
 	char_map = {
@@ -47,7 +48,6 @@ local M = {
 	},
 
 	-- Check if a character is a valid input character to make a Vietnamese character
-	--
 	is_diacritic_pressed = function(char)
 		return char:lower():match("[sfrxjzawdeo]") ~= nil
 	end,

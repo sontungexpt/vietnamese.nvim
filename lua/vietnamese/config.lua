@@ -2,15 +2,27 @@ local type = type
 
 local METHOD_CONFIG_PATH = "vietnamese.method."
 local SUPPORTED_METHODS = {
-	telex = true,
-	vni = true,
+	"telex", -- Telex input method
+	"vni", -- VNI input method
 }
 
-local M = {}
+---@enum ToneStrategy
+local ToneStrategy = {
+	MODERN = "modern", -- Modern tone strategy
+	OLD = "old", -- Old tone strategy
+}
+
+local M = {
+	ToneStrategy = ToneStrategy, -- Export ToneStrategy for external use
+}
+
 local curr_method_config = nil
 
+---@type Config
 local default_config = {
 	enabled = true,
+	-- "old" | "modern"
+	tone_strategy = ToneStrategy.MODERN, -- Default tone strategy
 	input_method = "telex", -- Default input method
 	excluded = {
 		filetypes = {
@@ -25,6 +37,10 @@ local default_config = {
 	},
 	custom_methods = {}, -- Custom input methods
 }
+
+M.get_tone_strategy = function()
+	return default_config.tone_strategy
+end
 
 M.is_enabled = function()
 	return default_config.enabled
@@ -94,7 +110,9 @@ local function merge_user_config(defaults, overrides)
 
 	-- Handle array-like tables
 	if defaults[1] ~= nil then
-		return overrides
+		for _, value in ipairs(overrides) do
+			defaults[#defaults + 1] = value
+		end
 	end
 
 	-- Deep merge dictionary-like tables
@@ -113,26 +131,22 @@ M.get_config = function()
 end
 
 function M.get_method_config()
-	if curr_method_config then
-		--- use cache for fastest
-		return curr_method_config
+	if not curr_method_config then
+		local current_method = default_config.input_method
+
+		curr_method_config = vim.list_contains(SUPPORTED_METHODS, current_method)
+				and require(METHOD_CONFIG_PATH .. current_method)
+			or default_config.custom_methods[current_method]
+
+		if type(curr_method_config) ~= "table" then
+			require("vietnamese.notifier").error(
+				"Invalid method configuration for '" .. current_method .. "'. Please check your configuration."
+			)
+			curr_method_config = require(METHOD_CONFIG_PATH .. SUPPORTED_METHODS[1]) -- Fallback
+		end
 	end
 
-	local current_method = default_config.input_method
-
-	local method_config = SUPPORTED_METHODS[current_method] and require(METHOD_CONFIG_PATH .. current_method)
-		or default_config.custom_methods[current_method]
-
-	if type(method_config) ~= "table" then
-		require("vietnamese.notifier").error(
-			"Invalid method configuration for '" .. current_method .. "'. Please check your configuration."
-		)
-		method_config = require(METHOD_CONFIG_PATH .. next(SUPPORTED_METHODS)) -- Fallback to default method
-	end
-
-	curr_method_config = method_config
-
-	return method_config
+	return curr_method_config
 end
 
 function M.is_excluded_filetype(filetype)

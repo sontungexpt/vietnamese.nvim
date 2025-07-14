@@ -1,0 +1,14 @@
+---@class Config
+---@field enabled boolean Whether Vietnamese input is is_enabled
+---@field tone_strategy ToneStrategy Tone tone_strategy
+---@field input_method string Input method to use
+---@field excluded {filetypes: table, buftypes: table} Excluded filetypes and buftypes
+---@field custom_methods table Custom input methods
+---
+
+---@class MethodConfig
+---@field tone_keys table<string, Diacritic>
+---@field tone_removal_keys table<string, boolean>
+---@field shape_keys table<string, table<string, Diacritic>>
+---@field char_map table<string, table<string, string>>
+---@field is_diacritic_pressed fun(char: string): boolean Check if a character is a valid input character to make a Vietnamese character
