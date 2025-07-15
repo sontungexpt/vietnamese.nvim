@@ -118,15 +118,11 @@ end
 --- @return string: The lowercase version of the character
 local function lower_char(c)
 	local len = #c
-	if len == 1 then
+	if len == 1 or len == 4 then
 		return c:lower()
 	elseif len == 2 or len == 3 then
 		local comp = UTF8_VNCHAR_COMPONENT[c]
 		return comp and comp.lo or c:lower()
-	elseif len == 4 then
-		-- a trick to make it faster
-		-- because this case is rarely used
-		return c:lower()
 	elseif len == 0 then
 		return ""
 	end
@@ -148,8 +144,8 @@ local function lower(word)
 	end
 
 	local chars = {}
-	for i, char in iter() do
-		chars[i] = lower_char(char)
+	for i, c in iter do
+		chars[i] = lower_char(c)
 	end
 	return concat_tight_range(chars)
 end
@@ -173,15 +169,11 @@ end
 --- @see M.upper
 local function upper_char(c)
 	local len = #c
-	if len == 1 then
+	if len == 1 or len == 4 then
 		return c:upper()
 	elseif len == 2 or len == 3 then
 		local comp = UTF8_VNCHAR_COMPONENT[c]
 		return comp and comp.up or c:upper()
-	elseif len == 4 then
-		-- a trick to make it faster
-		-- because this case is rarely used
-		return c:upper()
 	elseif len == 0 then
 		return ""
 	end
@@ -199,7 +191,7 @@ function M.upper(word)
 		return upper_char(word)
 	end
 	local chars = {}
-	for i, char in iter() do
+	for i, char in iter do
 		chars[i] = upper_char(char)
 	end
 	return concat_tight_range(chars)
@@ -331,7 +323,7 @@ end
 
 --- Strip the shape from a Vietnamese character
 --- @param c string The character to strip the shape from
---- @return string lv1_c The character without the shape (level 1 character), or the original character if no shape was find_vowel_seq_bounds
+--- @return string removed_shape_char The character without the shape (level 1 character), or the original character if no shape was find_vowel_seq_bounds
 --- @return Diacritic|nil stripped_shape The shape of the character if it exists, or nil if notify
 M.strip_shape = function(c)
 	local len = #c
@@ -340,18 +332,19 @@ M.strip_shape = function(c)
 		return c, nil
 	end
 
-	local dict = UTF8_VNCHAR_COMPONENT[c]
-	if not dict or not dict.shape then
+	local comp = UTF8_VNCHAR_COMPONENT[c]
+	if not comp or not comp.shape then
 		return c, nil
 	end
-	local lv1 = dict[1]
+
+	local lv1 = comp[1]
 	local diacritic_map = DIACRITIC_MAP[lv1]
-	local curr_tone = dict.tone
+	local curr_tone = comp.tone
 	if diacritic_map and curr_tone then
 		-- restore the tone if it exists
-		return diacritic_map[curr_tone] or c, dict.shape
+		return diacritic_map[curr_tone] or c, comp.shape
 	end
-	return lv1, dict.shape
+	return lv1, comp.shape
 end
 
 --- Attach a tone to a level 2 Vietnamese character
@@ -443,10 +436,19 @@ M.get_tone_mark = function(c)
 	end
 
 	local dict = UTF8_VNCHAR_COMPONENT[c]
-	if not dict then
+	return dict and dict.tone
+end
+
+--- Get the shape of a character
+--- @param c string The character to get the shape from
+--- @return Diacritic|nil The shape of the character if it exists, or nil if notify
+M.get_shape = function(c)
+	local len = #c
+	if len < 2 or len > 3 then
 		return nil
 	end
-	return dict.tone
+	local dict = UTF8_VNCHAR_COMPONENT[c]
+	return dict and dict.shape
 end
 
 M.strip_diacritics = function(c)
@@ -633,18 +635,21 @@ end
 --- @param char string: The character to check
 --- @return boolean: True if the character is "d" or "đ" or "D" or "Đ", false otherwise
 function M.is_d(char)
-	return char == "d" or char == "D" or char == "đ" or char == "Đ"
+	return char == "d" or char == "đ" or char == "D" or char == "Đ"
 end
 
---- Checks if u is a Vietnamese "u" or "ư" and o is a Vietnamese "o", "ô", or "ơ"
---- @param u string: The first character to check
---- @param o string: The second character to check
---- @return boolean: True if u is a Vietnamese "u" or "ư" and o is a Vietnamese "o", "ô", or "ơ", false otherwise
-function M.is_uo(u, o)
-	if u == "u" or u == "ư" or u == "U" or u == "Ư" then
-		return o == "o" or o == "ô" or o == "ơ" or o == "O" or o == "Ô" or o == "Ơ"
+function M.insertion_sort(list, list_size, comparator)
+	for i = 2, list_size do
+		local key = list[i]
+		local j = i - 1
+
+		while j > 0 and comparator(list[j], key) do
+			list[j + 1] = list[j]
+			j = j - 1
+		end
+		list[j + 1] = key
 	end
-	return false
+	return list
 end
 
 function M.benchmark(func, ...)
@@ -656,10 +661,12 @@ function M.benchmark(func, ...)
 	local elapsed_time = (end_time - start_time) / 1e6 -- Convert to milliseconds
 
 	-- print to file
-	local path = "/home/stilux/Data/Workspace/neovim-plugins/vietnamese/lua/benchmark.log"
+	local path = "/home/stilux/Data/Workspace/neovim-plugins/vietnamese.nvim/lua/benchmark.log"
 	local file = io.open(path, "a")
-	file:write(string.format("Benchmark: %s took %.2f ms\n", func, elapsed_time))
-	file:close()
+	if file then
+		file:write(string.format("Benchmark: %s took %.2f ms\n", func, elapsed_time))
+		file:close()
+	end
 
 	-- print to vim notify
 

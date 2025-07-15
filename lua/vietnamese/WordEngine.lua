@@ -10,9 +10,8 @@ local MAX_ONSET_LENGTH = 3
 
 local util = require("vietnamese.util")
 local mc_util = require("vietnamese.util.method-config")
-local config = require("vietnamese.config")
 
-local concat_tight_range, level = util.concat_tight_range, util.level
+local lower, concat_tight_range, level = util.lower, util.concat_tight_range, util.level
 local tbl_insert = table.insert
 
 --- @enum StructState
@@ -218,21 +217,24 @@ function WordEngine:feedkey()
 end
 
 ----- Updates the position of the tone mark in the word
+---# @param self WordEngine The WordEngine instance
 --- @param method_config table|nil The method configuration to use for updating the tone mark position
+--- @param tone_stragegy ToneStrategy The strategy to use for finding the main vowel position, defaults to "modern"
 --- @return boolean changed true if the tone mark position was updated, false otherwise
-function WordEngine:update_tone_pos(method_config)
+---@diagnostic disable-next-line: unused-local
+function WordEngine:update_tone_pos(method_config, tone_stragegy)
 	if self:analyze_structure() == StructInvalid then
 		return false
 	end
+
 	local p = _privates[self]
 	local tidx = p.tone_mark_idx
-
 	-- no tone
 	if tidx < 1 then
 		return false
 	end
 
-	local vowel, new_idx = self:find_tone_pos(true)
+	local vowel, new_idx = self:find_tone_pos(tone_stragegy, true)
 	if not vowel or new_idx == tidx then
 		return false
 	end
@@ -248,24 +250,39 @@ function WordEngine:tostring(use_raw)
 	return concat_tight_range(use_raw and _privates[self].raw or _privates[self].word)
 end
 
-local function find_modern_tone_pos(self, force_recheck)
-	local p = _privates[self]
+--- Finds the main vowel in the word based on the strategy
+--- @param word string[] The character list of the word_len
+--- @param vs integer The start index of the vowel sequence (1-based)
+--- @param ve integer The end index of the vowel sequence (1-based)
+--- @param private_fields PrivateWordEngineFields The private fields of the WordEngine instance
+--- @return string|nil The main vowel character if found, nil otherwise
+--- @return integer The index of the main vowel character if found, -1 otherwise
+local function find_old_tone_pos(word, vs, ve, private_fields)
+	local mvi = vs
 
-	if p.vowel_start < 0 then
-		return nil, -1
+	if ve - vs + 1 == TRIPTHONGS_LENGTH or ve < private_fields.wlen then
+		mvi = vs + 1 -- triphthong
 	end
 
-	local word, vs, ve = p.word, p.vowel_start, p.vowel_end
-	local tone_mark_idx = p.tone_mark_idx
-
-	-- only one vowel in the word
-	if vs == ve then
-		return word[vs], vs
-	elseif not force_recheck and tone_mark_idx > 0 then
-		return word[tone_mark_idx], tone_mark_idx
+	for k = vs, ve do
+		local v = word[k]
+		if v == "ơ" or v == "ê" or v == "ô" or v == "ư" or v == "ă" or v == "â" then
+			mvi = k -- first vowel is the main vowel
+		end
 	end
 
-	local vnorms = p.vnorms
+	return word[mvi], mvi
+end
+
+--- Finds the main vowel in the word based on the modern strategy
+--- @param word string[] The character list of the word_len
+--- @param vs integer The start index of the vowel sequence (1-based)
+--- @param ve integer The end index of the vowel sequence (1-based)
+--- @param private_fields PrivateWordEngineFields The private fields of the WordEngine instance
+--- @return string|nil The main vowel character if found, nil otherwise
+--- @return integer The index of the main vowel character if found, -1 otherwise
+local function find_modern_tone_pos(word, vs, ve, private_fields)
+	local vnorms = private_fields.vnorms
 	if not vnorms then
 		return nil, -1
 	end
@@ -293,17 +310,50 @@ local function find_modern_tone_pos(self, force_recheck)
 end
 
 --- Function to find main vowel
+--- @param stragegy ToneStrategy the strategy to use for finding the main vowel
 --- @param force_recheck boolean|nil whether to force recompute the position even it only had tone marked already
 --- @return string|nil the main vowel character if found, nil otherwise
 --- @return integer the index of the main vowel character if found, nil otherwise
-function WordEngine:find_tone_pos(force_recheck)
+function WordEngine:find_tone_pos(stragegy, force_recheck)
 	if self:analyze_structure() == StructInvalid then
 		return nil, -1
-	elseif config.get_tone_strategy() == "old" then
-		-- unimplemented
+	end
+
+	local p = _privates[self]
+	if p.vowel_start < 0 then
 		return nil, -1
 	end
-	return find_modern_tone_pos(self, force_recheck)
+
+	local word, vs, ve, tidx = p.word, p.vowel_start, p.vowel_end, p.tone_mark_idx
+
+	-- only one vowel in the word
+	if vs == ve then
+		return word[vs], vs
+	elseif not force_recheck and tidx > 0 then
+		return word[tidx], tidx
+	elseif stragegy == "old" then
+		return find_old_tone_pos(word, vs, ve, p)
+	end
+	return find_modern_tone_pos(word, vs, ve, p)
+end
+
+--- Detects the tone mark in the vowel sequence
+--- @param chars table The character table
+--- @param chars_size integer The length of the character table
+--- @param vowel_start integer The index of the first vowel (1-based)
+--- @param vowel_end integer The index of the last vowel (1-based)
+--- @return Diacritic|nil The tone mark if it exists, nil otherwise
+--- @return integer The index of the tone mark in the vowel sequence (1-based), or -1 if no tone mark exists
+---@diagnostic disable-next-line: unused-local
+local function detect_tone_mark(chars, chars_size, vowel_start, vowel_end)
+	local tone = nil
+	for i = vowel_start, vowel_end do
+		tone = util.get_tone_mark(chars[i])
+		if tone then
+			return tone, i
+		end
+	end
+	return nil, -1
 end
 
 --- Validate the vowel cluster in the character table
@@ -313,20 +363,10 @@ end
 --- @param vowel_end integer The index of the last vowel (1-based)
 --- @return VowelSeqStatus The status of the vowel sequence
 --- @return table|nil The normalized vowel sequence if it exists
---- @return Diacritic|nil The tone mark if it exists
---- @return integer The index of the tone mark in the vowel sequence (1-based), or -1 if no tone mark exists
-local function detect_vowel_seq_and_tone(chars, chars_size, vowel_start, vowel_end)
-	local tone_mark = nil
-	local tone_mark_idx = -1
-	local status = VowelSeqStatus.Valid
-
+---@diagnostic disable-next-line: unused-local
+local function detect_vowel_seq(chars, chars_size, vowel_start, vowel_end)
 	if vowel_start == vowel_end then
-		local lv2
-		lv2, tone_mark = util.strip_tone(chars[vowel_start])
-		if tone_mark then
-			tone_mark_idx = vowel_start
-		end
-		return status, { [vowel_start] = lv2 }, tone_mark, tone_mark_idx
+		return VowelSeqStatus.Valid, { [vowel_start] = level(chars[vowel_start], 2) }
 	end
 
 	-- convert the vowel to level 2 and store in a new layer with the same index in word
@@ -339,21 +379,16 @@ local function detect_vowel_seq_and_tone(chars, chars_size, vowel_start, vowel_e
 	local vnorms = {}
 	-- Check if the word has a tone-marked vowel
 	for i = vowel_start, vowel_end do
-		local tone
-		vnorms[i], tone = util.strip_tone(chars[i])
-		if tone then
-			tone_mark = tone
-			tone_mark_idx = i
-		end
+		vnorms[i] = level(chars[i], 2)
 	end
-	local vowel_seq = concat_tight_range(vnorms, vowel_start, vowel_end)
-	local seq_map = VOWEL_SEQS[vowel_seq]
+	local seq_map = VOWEL_SEQS[lower(concat_tight_range(vnorms, vowel_start, vowel_end))]
+
 	if seq_map == false then
-		status = VowelSeqStatus.Ambiguous
+		return VowelSeqStatus.Ambiguous, vnorms
 	elseif seq_map == nil then
-		status = VowelSeqStatus.Invalid
+		return VowelSeqStatus.Invalid, vnorms
 	end
-	return status, vnorms, tone_mark, tone_mark_idx
+	return VowelSeqStatus.Valid, vnorms
 end
 
 --- Validate onset (consonant cluster) before the vowel
@@ -380,9 +415,9 @@ local function detect_onset(chars, vowel_start, vowel_end)
 			-- e.g "qu", "gi"
 			return true, vowel_start
 		end
-		return ONSETS[char1:lower()] ~= nil, 0
+		return ONSETS[char1:lower()] ~= nil, cluster_len
 	elseif cluster_len == 2 then
-		return ONSETS[(chars[1] .. chars[2]):lower()] ~= nil, 0
+		return ONSETS[(chars[1] .. chars[2]):lower()] ~= nil, cluster_len
 	end
 	return ONSETS[(chars[1] .. chars[2] .. chars[3]):lower()] ~= nil, 0
 end
@@ -432,7 +467,7 @@ function WordEngine:analyze_structure(force)
 
 	local word, wlen = p.word, p.wlen
 
-	local vs, ve, _ = util.find_vowel_seq_bounds(word, wlen)
+	local vs, ve = util.find_vowel_seq_bounds(word, wlen)
 
 	if vs < 1 then
 		if wlen == 1 and util.is_d(word[1]) then
@@ -445,13 +480,11 @@ function WordEngine:analyze_structure(force)
 		return p.struct_state
 	end
 
-	local vowel_seq_status
-	vowel_seq_status, p.vnorms, p.tone_mark, p.tone_mark_idx = detect_vowel_seq_and_tone(word, wlen, vs, ve)
-
-	if vowel_seq_status == VowelSeqStatus.Invalid then
+	local vseq_status, vnorms = detect_vowel_seq(word, wlen, vs, ve)
+	if vseq_status == VowelSeqStatus.Invalid then
 		p.struct_state = StructInvalid
 		return p.struct_state
-	elseif vowel_seq_status == VowelSeqStatus.Ambiguous then
+	elseif vseq_status == VowelSeqStatus.Ambiguous then
 		p.struct_state = StructShapeReady
 	end
 
@@ -472,9 +505,11 @@ function WordEngine:analyze_structure(force)
 		return p.struct_state
 	end
 
+	p.tone_mark, p.tone_mark_idx = detect_tone_mark(word, wlen, vs, ve)
 	p.vowel_shift = vs - onset_end
 	p.vowel_start = vs
 	p.vowel_end = ve
+	p.vnorms = vnorms
 	p.struct_state = StructValid
 	return p.struct_state
 end
@@ -500,8 +535,9 @@ end
 --- Processes tone marks in the word
 --- @param self WordEngine The WordEngine instance
 --- @param method_config table The method configuration to use for processing tones
+--- @param tone_stragegy ToneStrategy The strategy to use for finding the main vowel position, defaults to "modern"
 --- @return boolean True if the tone mark was processed, false otherwise
-local function processes_tone(self, method_config)
+local function processes_tone(self, method_config, tone_stragegy)
 	local p = _privates[self]
 
 	local inserted_key, inserted_idx = p.inserted_key, p.inserted_idx
@@ -509,7 +545,7 @@ local function processes_tone(self, method_config)
 		return false
 	end
 
-	local main_vowel, tidx = self:find_tone_pos()
+	local main_vowel, tidx = self:find_tone_pos(tone_stragegy)
 
 	if not main_vowel or inserted_idx <= tidx then
 		return false
@@ -521,9 +557,8 @@ local function processes_tone(self, method_config)
 	if not applying_tone then
 		return false
 	elseif removed_tone == applying_tone then
-		self:input_key()
-		-- restore the tone mark
 		p.word[tidx] = lv2_vowel -- restore the original vowel
+		self:input_key()
 		p.tone_mark = nil
 		p.tone_mark_idx = -1
 	else
@@ -542,19 +577,24 @@ end
 --- @param ve integer The index of the last vowel (1-based)
 --- @param key string The character at the cursor position
 --- @param method_config table The method configuration to use for shape diacritics
---- @return {idx: integer, char: string, applying_shape:Diacritic, had_shape:boolean} effects A table of effects, each effect is a table with the following fields:
+--- @return table<integer,{idx: integer, no_shape_char: string, curr_shape: Diacritic, char: string, applying_shape:Diacritic }> effects A table of effects, each effect is a table with the following fields:
 --- @return integer ecount The number of effects collected
 local function collect_effects(chars, vs, ve, key, method_config)
+	local strip_shape = util.strip_shape
+	local get_shape_diacritic = mc_util.get_shape_diacritic
+
 	local effects = {}
 
 	local char1 = chars[1]
-	local shape_diacritic_d = util.is_d(char1) and mc_util.get_shape_diacritic(key, char1, method_config)
-	if shape_diacritic_d then
+	local horizontal_stroke = util.is_d(char1) and get_shape_diacritic(key, char1, method_config)
+	if horizontal_stroke then
+		local no_shape_char, curr_shape = strip_shape(char1)
 		effects[1] = {
 			idx = 1, -- index of the character in the word
 			char = char1, -- character itself
-			applying_shape = shape_diacritic_d, -- diacritic to apply
-			had_shape = util.has_shape(char1), -- if the character already has a shape diacritic
+			no_shape_char = no_shape_char, -- character without shape diacritic
+			curr_shape = curr_shape, -- current shape diacritic of the character
+			applying_shape = horizontal_stroke, -- diacritic to apply
 		}
 		return effects, 1
 	end
@@ -563,60 +603,63 @@ local function collect_effects(chars, vs, ve, key, method_config)
 	-- to make sure that in the "qu" or "gi" case "u" and "i" is consider ass a consonant
 	for i = vs, ve do
 		local c = chars[i]
-		local shape_diacritic = mc_util.get_shape_diacritic(key, c, method_config)
+		local shape_diacritic = get_shape_diacritic(key, c, method_config)
 		if shape_diacritic then
+			local no_shape_char, curr_shape = strip_shape(c)
 			ecount = ecount + 1
 			effects[ecount] = {
 				idx = i,
 				char = c,
+				no_shape_char = no_shape_char,
+				curr_shape = curr_shape,
 				applying_shape = shape_diacritic,
-				had_shape = util.has_shape(c),
 			}
 		end
 	end
 	return effects, ecount
 end
 
-local function processes_shape(self, method_config)
+local function processes_shape(self, method_config, tone_stragegy)
 	local p = _privates[self]
 
-	local word, wlen, inserted_idx, inserted_key = p.word, p.wlen, p.inserted_idx, p.inserted_key
-	local vs, ve = p.vowel_start, p.vowel_end
+	local word, wlen, vs, ve, inidx = p.word, p.wlen, p.vowel_start, p.vowel_end, p.inserted_idx
 
-	local effects, ecount = collect_effects(word, vs, ve, inserted_key, method_config)
+	local effects, ecount = collect_effects(word, vs, ve, p.inserted_key, method_config)
 
 	if ecount == 0 then
 		return false -- no shape diacritic found
 	elseif ecount > 1 then
-		local e1, e2 = effects[1], effects[2]
-		local e1_idx, e2_idx = e1.idx, e2.idx
+		local u, o = effects[1], effects[2]
+		local uidx, oidx = u.idx, o.idx
+		local lv1u = level(u.char, 1)
+		local lv1o = level(o.char, 1)
 
-		local should_dual_horn = e2_idx < wlen -- must have the coda
-			and e2_idx - e1_idx == 1 -- must be adjacent
-			and util.is_uo(e1.char, e2.char)
+		local dual_horn = oidx < wlen -- must have the coda
+			and oidx - uidx == 1 -- must be adjacent
+			and (lv1u == "u" or lv1u == "U") -- must be a vowel
+			and (lv1o == "o" or lv1o == "O") -- must be a vowel
 			-- just need one of them to affect
-			and (e1.applying_shape == Diacritic.Horn or e2.applying_shape == Diacritic.Horn)
+			and (u.applying_shape == Diacritic.Horn or o.applying_shape == Diacritic.Horn)
 
-		if should_dual_horn then
-			if e2_idx >= inserted_idx then
+		if dual_horn then
+			if oidx >= inidx then
 				return false
-			elseif e1.had_shape and e2.had_shape then
+			elseif u.curr_shape == Diacritic.Horn and o.curr_shape == Diacritic.Horn then
 				-- restore the horn
-				word[e1_idx] = util.strip_shape(e1.char)
-				word[e2_idx] = util.strip_shape(e2.char)
+				word[uidx] = u.no_shape_char
+				word[oidx] = o.no_shape_char
 				self:input_key()
 				return true
 			end
 
-			word[e1_idx] = util.merge_diacritic(e1.char, e1.applying_shape)
-			word[e2_idx] = util.merge_diacritic(e2.char, e2.applying_shape)
+			word[uidx] = util.merge_diacritic(u.char, Diacritic.Horn)
+			word[oidx] = util.merge_diacritic(o.char, Diacritic.Horn, true) --because o has 2 case shape
 
-			local status, new_vnorms = detect_vowel_seq_and_tone(word, wlen, vs, ve)
-
+			local status, new_vnorms = detect_vowel_seq(word, wlen, vs, ve)
 			if status == VowelSeqStatus.Valid then
 				p.vnorms = new_vnorms
 				p.struct_state = StructValid
-				self:update_tone_pos(method_config)
+				self:update_tone_pos(method_config, tone_stragegy)
 				return true
 			end
 
@@ -624,11 +667,11 @@ local function processes_shape(self, method_config)
 			return false
 		end
 
-		-- sort by has shape
-		table.sort(effects, function(a, b)
-			if a.had_shape and not b.had_shape then
+		-- sort by had shape
+		util.insertion_sort(effects, ecount, function(a, b)
+			if a.curr_shape and not b.curr_shape then
 				return true
-			elseif not a.had_shape and b.had_shape then
+			elseif not a.curr_shape and b.curr_shape then
 				return false
 			end
 			return a.idx < b.idx
@@ -637,65 +680,58 @@ local function processes_shape(self, method_config)
 
 	for i = 1, ecount do
 		local e = effects[i]
-		local e_idx, e_char = e.idx, e.char
+		local e_idx = e.idx
 
-		if e_idx < inserted_idx then
-			if e.had_shape then
+		if e_idx < inidx then
+			if e.curr_shape == e.applying_shape then
 				-- restore shape diacritic
-				local lv1_c, stripped_shape = util.strip_shape(e_char)
-				if stripped_shape == e.applying_shape then
-					word[e_idx] = lv1_c
-					self:input_key()
-					return true
-				end
-			end
-			-- not in vowel sequence means a consonant
-			-- d
-			if e_idx < vs or e_idx > ve then
-				word[e_idx] = util.merge_diacritic(e_char, e.applying_shape, true)
+				word[e_idx] = e.no_shape_char
+				self:input_key()
+				return true
+			elseif e_idx < vs or e_idx > ve then
+				-- case d character
+				-- e_idx < vs when had at least 1 vowel
+				-- e_idx > ve when had no vowel
+				word[e_idx] = util.merge_diacritic(e.char, e.applying_shape)
 				return true
 			end
 
 			-- in vowel sequence
-			word[e_idx] = util.merge_diacritic(e_char, e.applying_shape, true)
-			local status, new_vnorms = detect_vowel_seq_and_tone(word, wlen, vs, ve)
+			word[e_idx] = util.merge_diacritic(e.char, e.applying_shape, true)
+			local status, new_vnorms = detect_vowel_seq(word, wlen, vs, ve)
 			if status == VowelSeqStatus.Valid then
 				p.vnorms = new_vnorms
 				p.struct_state = StructValid
-				self:update_tone_pos(method_config)
+				self:update_tone_pos(method_config, tone_stragegy)
 				return true
-			elseif i == ecount then
-				-- can not apply the shape diacritic
-				self:input_key()
-				p.struct_state = StructUnknown
-				return false
 			end
 
 			-- restore the before state
-			word[e_idx] = e_char
+			word[e_idx] = e.char
 		end
 	end
-
+	self:input_key()
 	return false
 end
 
 --- Processes diacritics in the word
 --- @param method_config table The method configuration to use for processing diacritics
 --- @return boolean changed True if the diacritic was processed, false otherwise
-function WordEngine:processes_diacritic(method_config)
+function WordEngine:processes_diacritic(method_config, tone_stragegy)
 	if self:analyze_structure() == StructInvalid then
 		return false
 	end
-	local p = _privates[self]
-	local inserted_key = p.inserted_key
 
-	---@cast inserted_key string
-	if mc_util.is_tone_removal_key(inserted_key, method_config) then
+	local p = _privates[self]
+	local inkey = p.inserted_key
+
+	---@cast inkey string
+	if mc_util.is_tone_removal_key(inkey, method_config) then
 		return remove_tone(self, method_config)
-	elseif mc_util.is_shape_key(inserted_key, method_config) then
-		return processes_shape(self, method_config)
-	elseif mc_util.is_tone_key(inserted_key, method_config) then
-		return processes_tone(self, method_config)
+	elseif mc_util.is_shape_key(inkey, method_config) then
+		return processes_shape(self, method_config, tone_stragegy)
+	elseif mc_util.is_tone_key(inkey, method_config) then
+		return processes_tone(self, method_config, tone_stragegy)
 	end
 	return false
 end

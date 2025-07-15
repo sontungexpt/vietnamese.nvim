@@ -258,59 +258,61 @@ M.setup = function()
 					return
 				end
 
-				local method_config = config.get_method_config()
-				if not method_config then
-					reset_state()
-					return
-				end
-
-				local changed = false
-				local word_engine = require("vietnamese.WordEngine"):new(cword, cwlen, inserted_char, inserted_idx)
-
-				-- check the diacritic key first
-				if
-					is_diacritic_key_pressed
-					and word_engine:is_potential_diacritic_key(method_config)
-					and word_engine:is_potential_vnword()
-				then
-					changed = word_engine:processes_diacritic(method_config)
-				end
-
-				-- if not changed, then check the vowel
-				if not changed and is_vowel_pressed then
-					word_engine:feedkey()
-					changed = word_engine:update_tone_pos(method_config)
-				end
-
-				-- if still not changed, then end
-				if not changed then
-					reset_state()
-					return
-				end
-
-				local pos = nvim_win_get_cursor(0)
-				local row = pos[1] -- Row is 1-indexed in API
-				local row_0based = row - 1 -- Row is 0-indexed in API
-				local col_0based = pos[2] -- Column is 0-indexed
-
-				local new_word = word_engine:tostring()
-
-				local wstart, wend = word_engine:col_bounds(col_0based)
-
-				nvim_buf_set_text(0, row_0based, wstart, row_0based, wend, { new_word })
-
-				local new_cursor_col = word_engine:get_curr_cursor_col(col_0based)
-				if col_0based ~= new_cursor_col then
-					-- Restore cursor position
-					nvim_win_set_cursor(0, { row, new_cursor_col })
-
-					-- intergrate with bim plugin
-					if bim_ok then
-						bim_handler.trigger_cursor_move_accepted()
+				util.benchmark(function()
+					local method_config = config.get_method_config()
+					if not method_config then
+						reset_state()
+						return
 					end
-				end
 
-				reset_state()
+					local changed = false
+					local word_engine = require("vietnamese.WordEngine"):new(cword, cwlen, inserted_char, inserted_idx)
+
+					-- check the diacritic key first
+					if
+						is_diacritic_key_pressed
+						and word_engine:is_potential_diacritic_key(method_config)
+						and word_engine:is_potential_vnword()
+					then
+						changed = word_engine:processes_diacritic(method_config, config.get_tone_strategy())
+					end
+
+					-- if not changed, then check the vowel
+					if not changed and is_vowel_pressed then
+						word_engine:feedkey()
+						changed = word_engine:update_tone_pos(method_config, config.get_tone_strategy())
+					end
+
+					-- if still not changed, then end
+					if not changed then
+						reset_state()
+						return
+					end
+
+					local pos = nvim_win_get_cursor(0)
+					local row = pos[1] -- Row is 1-indexed in API
+					local row_0based = row - 1 -- Row is 0-indexed in API
+					local col_0based = pos[2] -- Column is 0-indexed
+
+					local new_word = word_engine:tostring()
+
+					local wstart, wend = word_engine:col_bounds(col_0based)
+
+					nvim_buf_set_text(0, row_0based, wstart, row_0based, wend, { new_word })
+
+					local new_cursor_col = word_engine:get_curr_cursor_col(col_0based)
+					if col_0based ~= new_cursor_col then
+						-- Restore cursor position
+						nvim_win_set_cursor(0, { row, new_cursor_col })
+
+						-- intergrate with bim plugin
+						if bim_ok then
+							bim_handler.trigger_cursor_move_accepted()
+						end
+					end
+
+					reset_state()
+				end)
 			end
 		end,
 	})

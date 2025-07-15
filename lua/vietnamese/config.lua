@@ -1,4 +1,5 @@
 local type = type
+local vim_bo = vim.bo
 
 local METHOD_CONFIG_PATH = "vietnamese.method."
 local SUPPORTED_METHODS = {
@@ -42,6 +43,12 @@ M.get_tone_strategy = function()
 	return default_config.tone_strategy
 end
 
+--- Set the tone strategy for Vietnamese input
+--- @param strategy ToneStrategy The tone strategy to set
+M.set_tone_strategy = function(strategy)
+	default_config.tone_strategy = strategy
+end
+
 M.is_enabled = function()
 	return default_config.enabled
 end
@@ -50,7 +57,7 @@ end
 --- @param  bufnr integer Buffer number to Check
 --- @return boolean True if the buffer is enabled, false otherwise
 M.is_buf_enabled = function(bufnr)
-	local bo = vim.bo[bufnr]
+	local bo = vim_bo[bufnr]
 	local filetype, buftype = bo.filetype, bo.buftype
 	local excluded = default_config.excluded or {}
 	for _, ft in ipairs(excluded.filetypes or {}) do
@@ -122,6 +129,7 @@ local function merge_user_config(defaults, overrides)
 
 	return defaults
 end
+
 M.set_user_config = function(user_config)
 	merge_user_config(default_config, user_config)
 end
@@ -150,7 +158,7 @@ function M.get_method_config()
 end
 
 function M.is_excluded_filetype(filetype)
-	if not filetype or type(filetype) ~= "string" then
+	if type(filetype) ~= "string" then
 		return false
 	end
 
@@ -159,7 +167,7 @@ function M.is_excluded_filetype(filetype)
 end
 
 function M.is_excluded_buftype(buftype)
-	if not buftype or type(buftype) ~= "string" then
+	if type(buftype) ~= "string" then
 		return false
 	end
 
@@ -168,7 +176,7 @@ function M.is_excluded_buftype(buftype)
 end
 
 function M.get_support_methods()
-	return vim.list_extend(vim.tbl_keys(SUPPORTED_METHODS), vim.tbl_keys(default_config.custom_methods))
+	return vim.list_extend(vim.deepcopy(SUPPORTED_METHODS), vim.tbl_keys(default_config.custom_methods))
 end
 
 return M
