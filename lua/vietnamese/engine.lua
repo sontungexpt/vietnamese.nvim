@@ -202,8 +202,8 @@ M.setup = function()
 			if config.is_enabled() and config.is_buf_enabled(args.buf) and args.event == "InsertEnter" then
 				---@diagnostic disable-next-line: unused-local
 				register_onkey(function(key, typed)
-					inserted_char = key
-					delete_pressed = key == "\b" or key == "\x7f"
+					inserted_char = typed
+					delete_pressed = typed == "\b" or typed == "\x7f"
 				end)
 			else
 				unregister_onkey()
