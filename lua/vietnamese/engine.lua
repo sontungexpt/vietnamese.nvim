@@ -170,7 +170,6 @@ M.setup = function()
 	end
 
 	--- disable system IME on startup
-	system_ime.identify_system_IME()
 	system_ime.disable()
 
 	api.nvim_create_autocmd({

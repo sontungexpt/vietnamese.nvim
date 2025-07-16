@@ -10,7 +10,7 @@ local M = {
 		["."] = Diacritic.Dot,
 	},
 	tone_removal_keys = {
-		["-"] = true, -- This is the key for removing tones in VIQR
+		["0"] = true,
 	},
 	shape_keys = {
 		["^"] = {

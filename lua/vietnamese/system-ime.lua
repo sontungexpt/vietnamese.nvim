@@ -1,132 +1,114 @@
 ---- avoid to call too many times
-local M = {}
-local Ibus = {
-	command = "ibus",
-	get_current_engine = function(cb)
-		vim.system({
-			"ibus",
-			"engine",
-		}, {}, function(out)
-			if out and out.code == 0 and out.stdout then
-				local engine = out.stdout:match("[^\r\n]+")
-				cb(engine)
-			end
-		end)
-	end,
-}
+local MAX_RETRY = 5
 
-Ibus.enable = function(time)
-	if time > 5 then
-		return
-	elseif not Ibus.disabled then
+--- IME class to manage Input Method Editors (IMEs)
+--- @class IME
+--- @field name string The name of the IME
+--- @field enabled_cmd string[] The command to enable the IME
+--- @field disabled_cmd string[] The command to disable the IME
+--- @field installed boolean Indicates if the IME is installed
+--- @field disabled boolean Indicates if the IME is currently disabled
+local IME = {}
+IME.__index = IME
+
+function IME:new(name, enabled_cmd, disabled_cmd)
+	local executable = vim.fn.executable
+
+	return setmetatable({
+		name = name,
+		enabled_cmd = enabled_cmd or {},
+		disabled_cmd = disabled_cmd or {},
+		installed = executable(enabled_cmd[1]) == 1 and executable(disabled_cmd[1]) == 1,
+		disabled = false,
+	}, self)
+end
+
+--- Retry command execution with a maximum number of retries
+--- @param cmd string[] The command to execute
+--- @param max_retries integer The maximum number of max_retries
+--- @param on_success function? Callback function to call on success
+--- @param on_error function? Callback function to call on error
+local function retry_cmd(cmd, max_retries, on_success, on_error, time)
+	time = time or 1
+	if time > max_retries then
 		return
 	end
 
-	vim.system({
+	vim.system(cmd, {}, function(out)
+		if out and out.code == 0 then
+			if on_success then
+				on_success(out)
+			end
+		else
+			if on_error then
+				on_error(out, time)
+			end
+			retry_cmd(cmd, max_retries, on_success, on_error, time + 1)
+		end
+	end)
+end
+
+--- Enable the IME
+function IME:enable()
+	if not self.installed or not self.disabled then
+		return
+	end
+
+	retry_cmd(self.enabled_cmd, MAX_RETRY, function()
+		self.disabled = false
+		require("vietnamese.notifier").info(self.name .. " has been enabled.")
+	end)
+end
+
+--- Disable the IME
+function IME:disable()
+	if not self.installed or self.disabled then
+		return
+	end
+
+	retry_cmd(self.disabled_cmd, MAX_RETRY, function()
+		self.disabled = true
+		require("vietnamese.notifier").info(self.name .. " has been disabled.")
+	end)
+end
+
+local IME_SUPPORTEDS = {
+	IME:new("Ibus", {
 		"ibus-daemon",
 		"-drx",
-	}, {}, function(out)
-		if out and out.code == 0 then
-			Ibus.disabled = false
-			require("vietnamese.notifier").info("successfully restored Ibus after " .. time .. " times.")
-		else
-			Ibus.enable(time + 1) -- retry if failed
-		end
-	end)
-end
-
-Ibus.disable = function(time)
-	if time > 5 then
-		return
-	elseif Ibus.disabled then
-		return
-	end
-
-	vim.system({
+	}, {
 		"ibus",
 		"exit",
-		-- "engine",
-		-- "xkb:us::eng",
-	}, {}, function(out)
-		if out and out.code == 0 then
-			Ibus.disabled = true
-			require("vietnamese.notifier").info("Ibus has been disabled after " .. time .. " times.")
-		else
-			Ibus.disable(time + 1) -- retry if failed
-		end
-	end)
-end
+	}),
 
-local Fcitx4 = {
-	command = "fcitx-remote",
-}
-
-Fcitx4.enable = function(time)
-	if time > 5 then
-		return
-	elseif not Fcitx4.disabled then
-		return
-	end
-
-	vim.system({
+	IME:new("Fcitx4", {
 		"fcitx-remote",
 		"-o",
-	}, {}, function(out)
-		if out and out.code == 0 then
-			Fcitx4.disabled = false
-			require("vietnamese.notifier").info("Fcitx5 has been enabled.")
-		else
-			require("vietnamese.notifier").error("Failed to enable Fcitx5.")
-		end
-	end)
-end
-
-Fcitx4.disable = function(time)
-	if time > 5 then
-		return
-	elseif Fcitx4.disabled then
-		return
-	end
-
-	vim.system({
+	}, {
 		"fcitx-remote",
 		"-c",
-	}, {}, function(out)
-		if out and out.code == 0 then
-			Fcitx4.disabled = true
-			require("vietnamese.notifier").info("Fcitx5 has been disabled.")
-		else
-			require("vietnamese.notifier").error("Failed to disable Fcitx5.")
-		end
-	end)
-end
+	}),
 
-local SUPPORTED_IMES = {
-	Ibus,
-	Fcitx4,
+	IME:new("Fcitx5", {
+		"fcitx5-remote",
+		"-r",
+	}, {
+		"fcitx5-remote",
+		"-c",
+	}),
 }
 
-M.identify_system_IME = function()
-	for _, ime in ipairs(SUPPORTED_IMES) do
-		if vim.fn.executable(ime.command) == 1 then
-			ime.installed = true
-		end
-	end
-end
+local M = {}
 
 M.enable = function()
-	for _, ime in ipairs(SUPPORTED_IMES) do
-		if ime.installed then
-			ime.enable(1)
-		end
+	for _, ime in ipairs(IME_SUPPORTEDS) do
+		ime:enable()
 	end
 end
 
 M.disable = function()
-	for _, ime in ipairs(SUPPORTED_IMES) do
-		if ime.installed then
-			ime.disable(1)
-		end
+	for _, ime in ipairs(IME_SUPPORTEDS) do
+		ime:disable()
 	end
 end
 

@@ -4,7 +4,8 @@
 
 ## 🔧 Tính năng chính
 
-- Gõ dấu **Telex**(dơn giản), **VNI** đúng vị trí, tự động điều chỉnh dấu cho từ hiện tại trên con trỏ.
+- Gõ dấu **Telex**(dơn giản), **VNI**, **VIQR** đúng vị trí, tự động điều chỉnh dấu cho từ hiện tại trên con trỏ.
+
 - Tự động bật/tắt IME hệ thống khi focus/blur Neovim.
 - Realtime xử lý dấu câu khi gõ
 - Tương thích với plugin **bim** để xử lí việc mapping jj hay jk để escape
