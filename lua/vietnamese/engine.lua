@@ -170,6 +170,7 @@ M.setup = function()
 	end
 
 	--- disable system IME on startup
+	system_ime.identify_system_IME()
 	system_ime.disable()
 
 	api.nvim_create_autocmd({
@@ -185,7 +186,7 @@ M.setup = function()
 			elseif args.event == "FocusGained" then
 				system_ime.disable()
 			else
-				system_ime.restore()
+				system_ime.enable()
 			end
 		end,
 	})
@@ -278,8 +279,7 @@ M.setup = function()
 
 				-- if not changed, then check the vowel
 				if not changed and is_vowel_pressed then
-					word_engine:input_key()
-					changed = word_engine:update_tone_pos(method_config, config.get_tone_strategy())
+					changed = word_engine:processes_new_vowel(method_config, config.get_tone_strategy())
 				end
 
 				-- if still not changed, then end
@@ -290,8 +290,7 @@ M.setup = function()
 
 				local pos = nvim_win_get_cursor(0)
 				local row = pos[1] -- Row is 1-indexed in API
-				local row_0based = row - 1 -- Row is 0-indexed in API
-				local col_0based = pos[2] -- Column is 0-indexed
+				local row_0based, col_0based = row - 1, pos[2]
 
 				local new_word = word_engine:tostring()
 

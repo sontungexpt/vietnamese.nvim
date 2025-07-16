@@ -1,35 +1,34 @@
-local ENUM_DIACRITIC = require("vietnamese.constant").Diacritic
+local Diacritic = require("vietnamese.constant").Diacritic
 
 local M = {
 	tone_keys = {
-		["1"] = ENUM_DIACRITIC.Acute,
-		["2"] = ENUM_DIACRITIC.Grave,
-		["3"] = ENUM_DIACRITIC.Hook,
-		["4"] = ENUM_DIACRITIC.Tilde,
-		["5"] = ENUM_DIACRITIC.Dot,
+		["1"] = Diacritic.Acute,
+		["2"] = Diacritic.Grave,
+		["3"] = Diacritic.Hook,
+		["4"] = Diacritic.Tilde,
+		["5"] = Diacritic.Dot,
 	},
 	tone_removal_keys = {
-		"0",
 		["0"] = true,
 	},
 	shape_keys = {
 		["6"] = {
-			["a"] = ENUM_DIACRITIC.Circumflex,
-			["e"] = ENUM_DIACRITIC.Circumflex,
-			["o"] = ENUM_DIACRITIC.Circumflex,
+			["a"] = Diacritic.Circumflex,
+			["e"] = Diacritic.Circumflex,
+			["o"] = Diacritic.Circumflex,
 		},
 
 		["7"] = {
-			["u"] = ENUM_DIACRITIC.Horn,
-			["o"] = ENUM_DIACRITIC.Horn,
+			["u"] = Diacritic.Horn,
+			["o"] = Diacritic.Horn,
 		},
 
 		["8"] = {
-			["a"] = ENUM_DIACRITIC.Breve,
+			["a"] = Diacritic.Breve,
 		},
 
 		["9"] = {
-			["d"] = ENUM_DIACRITIC.HorizontalStroke,
+			["d"] = Diacritic.HorizontalStroke,
 		},
 	},
 	char_map = {},

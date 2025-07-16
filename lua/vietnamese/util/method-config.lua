@@ -68,7 +68,7 @@ local function get_shape_diacritic(key, affected_char, method_config, strict)
 		return nil
 	end
 
-	affected_char = strict and affected_char or util.level(affected_char, 1)
+	affected_char = strict and affected_char or level(affected_char, 1)
 	local diacritic_map = DIACRITIC_MAP[affected_char]
 	if not diacritic_map then
 		return nil

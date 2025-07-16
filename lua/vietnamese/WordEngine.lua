@@ -3,11 +3,6 @@ local ONSETS, CODAS, VOWEL_SEQS, VOWEL_PRIORITY =
 	CONSTANT.ONSETS, CONSTANT.CODAS, CONSTANT.VOWEL_SEQS, CONSTANT.VOWEL_PRIORITY
 local Diacritic = CONSTANT.Diacritic
 
-local SINGLE_VOWEL_LENGTH = 1
-local TRIPTHONGS_LENGTH = 3
-
-local MAX_ONSET_LENGTH = 3
-
 local util = require("vietnamese.util")
 local mc_util = require("vietnamese.util.method-config")
 
@@ -118,14 +113,26 @@ function WordEngine:new(cword, cwlen, inserted_key, inserted_idx)
 	return obj
 end
 
-function WordEngine:iter_chars(cb, use_raw)
+--- Iterates over the characters in the word
+--- @param use_raw boolean if true, iterates over the raw character list, otherwise iterates over the word character List
+--- @return fun(): integer|nil, string|nil a function that returns the index and character at that Index
+function WordEngine:iter_chars(use_raw)
 	local p = _privates[self]
-	local chars = use_raw and p.raw or p.word
 	local length = use_raw and p.rawlen or p.wlen
+	if length < 1 then
+		return function()
+			return nil, nil -- no characters to iteratec
+		end
+	end
 
-	for i = 1, length, 1 do
-		local char = chars[i]
-		cb(i, char)
+	local chars = use_raw and p.raw or p.word
+	local i = 0
+	return function()
+		i = i + 1
+		if i > length then
+			return nil -- no characters to iterate
+		end
+		return i, chars[i - 1] -- return the next character and its index
 	end
 end
 
@@ -146,7 +153,7 @@ end
 
 --- Checks if the word is potential to apply diacritic
 --- @param method_config table the method configuration to use for checking
---- @return boolean true if the diacritic can be applied, false otherwise
+--- @return boolean valid if the diacritic can be applied, false otherwise
 function WordEngine:is_potential_diacritic_key(method_config)
 	local p = _privates[self]
 	local raw, inserted_key = p.raw, p.inserted_key
@@ -165,6 +172,23 @@ end
 function WordEngine:inserted_key()
 	local p = _privates[self]
 	return p.inserted_key or ""
+end
+
+--- Processes the new vowel character at the cursor position
+--- @param method_config table the method configuration to use for processing
+--- @param tone_stragegy ToneStrategy the strategy to use for finding the main vowel position, defaults to "modern"
+function WordEngine:processes_new_vowel(method_config, tone_stragegy)
+	local p = _privates[self]
+	local raw, inidx = p.raw, p.inserted_idx
+
+	if
+		(inidx > 1 and util.is_vietnamese_vowel(raw[inidx - 1]))
+		or (inidx < p.rawlen and util.is_vietnamese_vowel(raw[inidx + 1]))
+	then
+		self:input_key()
+		return self:update_tone_pos(method_config, tone_stragegy)
+	end
+	return false
 end
 
 --- Copies the raw character list to the word character list
@@ -254,7 +278,7 @@ end
 local function find_old_tone_pos(word, wlen, vs, ve, vnorms)
 	local mvi = vs
 
-	if ve - vs + 1 == TRIPTHONGS_LENGTH or ve < wlen then
+	if ve - vs + 1 == 3 or ve < wlen then
 		mvi = vs + 1 -- triphthong
 	end
 
@@ -400,7 +424,7 @@ local function detect_onset(chars, vowel_start, vowel_end)
 	local cluster_len = vowel_start - 1
 	if cluster_len == 0 then
 		return 0
-	elseif cluster_len > MAX_ONSET_LENGTH then
+	elseif cluster_len > 3 then
 		return -1
 	elseif cluster_len == 1 then
 		local c1 = chars[1]

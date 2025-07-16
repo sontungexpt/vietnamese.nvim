@@ -5,6 +5,7 @@ local METHOD_CONFIG_PATH = "vietnamese.method."
 local SUPPORTED_METHODS = {
 	"telex", -- Telex input method
 	"vni", -- VNI input method
+	"viqr", -- VIQR input method
 }
 
 ---@enum ToneStrategy
@@ -74,17 +75,19 @@ M.is_buf_enabled = function(bufnr)
 	return true
 end
 
-M.set_ennabled = function(enabled)
+M.set_enabled = function(enabled)
 	default_config.enabled = enabled
 	if enabled then
 		-- disable system IME if it was enabled
 		require("vietnamese.system-ime").disable()
+	else
+		require("vietnamese.system-ime").enable()
 	end
 	return enabled
 end
 
 M.toggle_enabled = function()
-	return M.set_ennabled(not default_config.enabled)
+	return M.set_enabled(not default_config.enabled)
 end
 
 function M.get_input_method()

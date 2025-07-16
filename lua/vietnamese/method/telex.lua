@@ -10,7 +10,6 @@ local M = {
 		["j"] = Diacritic.Dot,
 	},
 	tone_removal_keys = {
-		"z",
 		["z"] = true,
 	},
 	shape_keys = {
