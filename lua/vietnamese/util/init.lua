@@ -2,12 +2,10 @@ local vim = vim
 local api = vim.api
 local nvim_buf_get_text = api.nvim_buf_get_text
 local str_utf_pos = vim.str_utf_pos
-local tbl_concat = table.concat
 
 local CONSTANT = require("vietnamese.constant")
-local UTF8_VNCHAR_COMPONENT = CONSTANT.UTF8_VNCHAR_COMPONENT
-local DIACRITIC_MAP = CONSTANT.DIACRITIC_MAP
-local VOWEL_PRIORITY = CONSTANT.VOWEL_PRIORITY
+local UTF8_VNCHAR_COMPONENT, DIACRITIC_MAP, VOWEL_PRIORITY =
+	CONSTANT.UTF8_VNCHAR_COMPONENT, CONSTANT.DIACRITIC_MAP, CONSTANT.VOWEL_PRIORITY
 local Diacritic = CONSTANT.Diacritic
 
 local M = {}
@@ -42,14 +40,14 @@ local function concat_tight_range(list, i, j, list_size)
 	elseif len == 3 then
 		return list[i] .. list[i + 1] .. list[j]
 	elseif len < 31 then
-		return tbl_concat(list, "", i, j)
+		return table.concat(list, "", i, j)
 	end
 
 	local buf = {}
 	for k = i, j do
 		buf[#buf + 1] = list[k]
 	end
-	return tbl_concat(buf)
+	return table.concat(buf)
 end
 M.concat_tight_range = concat_tight_range
 
@@ -61,9 +59,12 @@ function M.str2chars(str)
 	local chars = {}
 	local pos = str_utf_pos(str)
 	local len = #pos
+
+	-- hoisting
+	local start, start_next
 	for i = 1, len do
-		local start_i, start_in = pos[i], pos[i + 1]
-		chars[i] = str:sub(start_i, start_in ~= nil and start_in - 1 or #str)
+		start, start_next = pos[i], pos[i + 1]
+		chars[i] = str:sub(start, start_next ~= nil and start_next - 1 or #str)
 	end
 	return chars, len
 end
@@ -134,13 +135,11 @@ M.lower_char = lower_char
 --- @param word string The string to Convert
 --- @return string The lowercase version of the starting
 local function lower(word)
-	if word == "" then
-		return ""
-	end
-
 	local iter, len = M.iter_chars(word)
 	if len == 1 then
 		return lower_char(word)
+	elseif len == 0 then
+		return ""
 	end
 
 	local chars = {}
@@ -160,7 +159,7 @@ function M.is_lower(c)
 	if not comp then
 		return c:match("^[a-z]$") ~= nil
 	end
-	return comp.lo ~= nil
+	return comp.lo == c
 end
 
 --- Convert a character to uppercase
@@ -206,7 +205,7 @@ function M.is_upper(c)
 	if not comp then
 		return c:match("^[A-Z]$") ~= nil
 	end
-	return comp.up ~= nil
+	return comp.up == c
 end
 
 --- Get the level of a Vietnamese character
@@ -413,14 +412,13 @@ end
 --- @param j integer|nil The ending index (1-based)
 --- @return boolean unique True if there is at most one tone marked character in the range, false otherwise
 M.unique_tone_marked = function(chars, chars_size, i, j)
-	local count = 0
+	local found = false
 	for k = (i or 1), (j or chars_size) do
-		local c = chars[k]
-		if has_tone_marked(c) then
-			count = count + 1
-		end
-		if count > 1 then
-			return false
+		if has_tone_marked(chars[k]) then
+			if found then
+				return false
+			end
+			found = true
 		end
 	end
 	return true
@@ -491,26 +489,12 @@ function M.find_vowel_seq_bounds(chars, chars_size)
 	return first, last, first == last
 end
 
---- Get the conflict vowel code for a character
---- @param c string The character to get the conflict vowel code for
---- @return string The conflict vowel code, which is "a" if the character is "e" or "a", otherwise the character itself
-function M.get_conflict_vowel_code(c)
-	local lv1 = lower(level(c, 1))
-	if lv1 == "a" or lv1 == "e" then
-		-- a never combine with e, so return a
-		return "a"
-	end
-	return c
-end
-
 --- Check if a sequence of characters is a potential vowel sequence
 --- @param chars table The character Table
 --- @param chars_size integer The size of the character Table
 --- @param strict boolean|nil If true, checks for strict Vietnamese vowels (no accept tone char like "á", "à", etc.)
 --- @return boolean True if the sequence is a potential vowel sequence, false otherwise
-function M.is_potiental_vowel_seq(chars, chars_size, strict)
-	-- assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
-
+function M.is_potential_vowel_seq(chars, chars_size, strict)
 	local start, stop = M.find_vowel_seq_bounds(chars, chars_size)
 	local len = stop - start + 1
 	if len < 1 or len > 3 then
@@ -576,13 +560,14 @@ end
 --- @return boolean True if the repetition exceeds the maximum allowed, false otherwise
 function M.exceeded_repetition_time(chars, chars_size, i, j)
 	local times = {}
+	local lv1c, time, curr_time
 	for k = (i or 1), (j or chars_size) do
-		local level1_c, time = get_max_repetition_time(chars[k])
-		local curr_time = (times[level1_c] or 0) + 1
+		lv1c, time = get_max_repetition_time(chars[k])
+		curr_time = (times[lv1c] or 0) + 1
 		if curr_time > time then
 			return true
 		end
-		times[level1_c] = curr_time
+		times[lv1c] = curr_time
 	end
 	return false
 end

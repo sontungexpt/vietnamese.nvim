@@ -135,7 +135,7 @@ function WordEngine:is_potential_vnword()
 
 	if
 		word_len > 1
-		and not util.is_potiental_vowel_seq(word, word_len, SINGLE_VOWEL_LENGTH, TRIPTHONGS_LENGTH)
+		and not util.is_potential_vowel_seq(word, word_len)
 		and not util.exceeded_repetition_time(word, word_len)
 		and not util.unique_tone_marked(word, word_len)
 	then
@@ -262,8 +262,9 @@ local function find_old_tone_pos(word, wlen, vs, ve, vnorms)
 		return nil, -1
 	end
 
+	local v
 	for k = vs, ve do
-		local v = vnorms[k]
+		v = vnorms[k]
 		if v == "ơ" or v == "ê" or v == "ô" or v == "ư" or v == "ă" or v == "â" then
 			mvi = k -- first vowel is the main vowel
 		end
@@ -280,6 +281,7 @@ end
 --- @param vnorms table|nil The normalized vowel sequence layer, mapping indices to normalized vowels
 --- @return string|nil The main vowel character if found, nil otherwise
 --- @return integer The index of the main vowel character if found, -1 otherwise
+---@diagnostic disable-next-line: unused-local
 local function find_modern_tone_pos(word, wlen, vs, ve, vnorms)
 	if not vnorms then
 		return nil, -1
@@ -296,8 +298,9 @@ local function find_modern_tone_pos(word, wlen, vs, ve, vnorms)
 	-- find the mark position base on the priority of the vowel
 	local mvi = -1
 	local min_priority = 100
+	local priority
 	for k = vs, ve do
-		local priority = VOWEL_PRIORITY[vnorms[k]]
+		priority = VOWEL_PRIORITY[vnorms[k]]
 		if priority < min_priority then
 			min_priority = priority
 			mvi = k
