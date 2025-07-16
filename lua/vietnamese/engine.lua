@@ -278,7 +278,7 @@ M.setup = function()
 
 				-- if not changed, then check the vowel
 				if not changed and is_vowel_pressed then
-					word_engine:feedkey()
+					word_engine:input_key()
 					changed = word_engine:update_tone_pos(method_config, config.get_tone_strategy())
 				end
 

@@ -209,13 +209,6 @@ function WordEngine:get(use_raw)
 	return use_raw and p.raw or p.word
 end
 
-function WordEngine:feedkey()
-	local p = _privates[self]
-	self:restore_raw({})
-
-	p.struct_state = StructUnknown
-end
-
 ----- Updates the position of the tone mark in the word
 ---# @param self WordEngine The WordEngine instance
 --- @param method_config table|nil The method configuration to use for updating the tone mark position
@@ -252,20 +245,25 @@ end
 
 --- Finds the main vowel in the word based on the strategy
 --- @param word string[] The character list of the word_len
+--- @param wlen integer The length of the word
 --- @param vs integer The start index of the vowel sequence (1-based)
 --- @param ve integer The end index of the vowel sequence (1-based)
---- @param private_fields PrivateWordEngineFields The private fields of the WordEngine instance
+--- @param vnorms table|nil The normalized vowel sequence layer, mapping indices to normalized vowels
 --- @return string|nil The main vowel character if found, nil otherwise
 --- @return integer The index of the main vowel character if found, -1 otherwise
-local function find_old_tone_pos(word, vs, ve, private_fields)
+local function find_old_tone_pos(word, wlen, vs, ve, vnorms)
 	local mvi = vs
 
-	if ve - vs + 1 == TRIPTHONGS_LENGTH or ve < private_fields.wlen then
+	if ve - vs + 1 == TRIPTHONGS_LENGTH or ve < wlen then
 		mvi = vs + 1 -- triphthong
 	end
 
+	if not vnorms then
+		return nil, -1
+	end
+
 	for k = vs, ve do
-		local v = word[k]
+		local v = vnorms[k]
 		if v == "ơ" or v == "ê" or v == "ô" or v == "ư" or v == "ă" or v == "â" then
 			mvi = k -- first vowel is the main vowel
 		end
@@ -276,13 +274,13 @@ end
 
 --- Finds the main vowel in the word based on the modern strategy
 --- @param word string[] The character list of the word_len
+--- @param wlen integer The length of the word
 --- @param vs integer The start index of the vowel sequence (1-based)
 --- @param ve integer The end index of the vowel sequence (1-based)
---- @param private_fields PrivateWordEngineFields The private fields of the WordEngine instance
+--- @param vnorms table|nil The normalized vowel sequence layer, mapping indices to normalized vowels
 --- @return string|nil The main vowel character if found, nil otherwise
 --- @return integer The index of the main vowel character if found, -1 otherwise
-local function find_modern_tone_pos(word, vs, ve, private_fields)
-	local vnorms = private_fields.vnorms
+local function find_modern_tone_pos(word, wlen, vs, ve, vnorms)
 	if not vnorms then
 		return nil, -1
 	end
@@ -332,9 +330,9 @@ function WordEngine:find_tone_pos(stragegy, force_recheck)
 	elseif not force_recheck and tidx > 0 then
 		return word[tidx], tidx
 	elseif stragegy == "old" then
-		return find_old_tone_pos(word, vs, ve, p)
+		return find_old_tone_pos(word, p.wlen, vs, ve, p.vnorms)
 	end
-	return find_modern_tone_pos(word, vs, ve, p)
+	return find_modern_tone_pos(word, p.wlen, vs, ve, p.vnorms)
 end
 
 --- Detects the tone mark in the vowel sequence
@@ -346,7 +344,7 @@ end
 --- @return integer The index of the tone mark in the vowel sequence (1-based), or -1 if no tone mark exists
 ---@diagnostic disable-next-line: unused-local
 local function detect_tone_mark(chars, chars_size, vowel_start, vowel_end)
-	local tone = nil
+	local tone
 	for i = vowel_start, vowel_end do
 		tone = util.get_tone_mark(chars[i])
 		if tone then
@@ -394,32 +392,25 @@ end
 --- Validate onset (consonant cluster) before the vowel
 --- @param chars table The character table
 --- @param vowel_start integer The index of the first vowel (1-based)
---- @return boolean is_valid True if the consonant cluster is valid, false otherwise
---- @return integer onset_end The index of the end of the onset cluster (1-based)
---- @note The consonant cluster is valid if:
---- - It is empty (no consonant before the vowel)
---- - It is a valid consonant cluster defined in the ONSETS table
----
---- @note If the consonant cluster overlaps with the vowel (e.g. "qu", "qo"), it is considered
---- valid and the first vowel index is adjusted by 1.
+--- @return integer onset_end The index of the end of the onset cluster (-1 if invalid otherwise >=0 valid, > 0 if found, == 0 if no onset found)
 local function detect_onset(chars, vowel_start, vowel_end)
 	local cluster_len = vowel_start - 1
 	if cluster_len == 0 then
-		return true, cluster_len
+		return 0
 	elseif cluster_len > MAX_ONSET_LENGTH then
-		return false, cluster_len
+		return -1
 	elseif cluster_len == 1 then
-		local char1 = chars[1]
-		if vowel_end > vowel_start and ONSETS[(char1 .. chars[2]):lower()] then
+		local c1 = chars[1]
+		if vowel_end > vowel_start and ONSETS[(c1 .. chars[2]):lower()] then
 			-- Special case: consonant overlaps with vowel
 			-- e.g "qu", "gi"
-			return true, vowel_start
+			return 2
 		end
-		return ONSETS[char1:lower()] ~= nil, cluster_len
+		return ONSETS[c1:lower()] and 1 or -1
 	elseif cluster_len == 2 then
-		return ONSETS[(chars[1] .. chars[2]):lower()] ~= nil, cluster_len
+		return ONSETS[(chars[1] .. chars[2]):lower()] and 2 or -1
 	end
-	return ONSETS[(chars[1] .. chars[2] .. chars[3]):lower()] ~= nil, 0
+	return ONSETS[(chars[1] .. chars[2] .. chars[3]):lower()] and 3 or -1
 end
 
 --- Fix the onset and vowel conflicts
@@ -427,14 +418,13 @@ end
 --- @param vowel_start integer The index of the first vowel (1-based)
 --- @param vowel_end integer The index of the last vowel (1-based)
 --- @return integer new_vowel_start The adjusted index of the first vowel (1-based)
---- @return integer new_vowel_end The index of the last vowel (1-based)
-local function fix_onset_vowel_collision(onset_end, vowel_start, vowel_end)
+local function skip_eaten_vowels(onset_end, vowel_start, vowel_end)
 	if onset_end < vowel_start then
-		return vowel_start, vowel_end
-	elseif onset_end + 1 > vowel_end then
-		return -1, -2 -- No vowel found
+		return vowel_start
 	end
-	return onset_end + 1, vowel_end
+
+	local new_vs = onset_end + 1
+	return new_vs > vowel_end and -1 or new_vs
 end
 
 --- Validate onset (consonant cluster) before the vowel
@@ -466,7 +456,6 @@ function WordEngine:analyze_structure(force)
 	end
 
 	local word, wlen = p.word, p.wlen
-
 	local vs, ve = util.find_vowel_seq_bounds(word, wlen)
 
 	if vs < 1 then
@@ -480,24 +469,24 @@ function WordEngine:analyze_structure(force)
 		return p.struct_state
 	end
 
-	local vseq_status, vnorms = detect_vowel_seq(word, wlen, vs, ve)
-	if vseq_status == VowelSeqStatus.Invalid then
-		p.struct_state = StructInvalid
-		return p.struct_state
-	elseif vseq_status == VowelSeqStatus.Ambiguous then
-		p.struct_state = StructShapeReady
-	end
-
-	local valid, onset_end = detect_onset(word, vs, ve)
-	if not valid then
+	local onset_end = detect_onset(word, vs, ve)
+	if onset_end < 0 then
 		p.struct_state = StructInvalid
 		return p.struct_state
 	end
 
-	vs, ve = fix_onset_vowel_collision(onset_end, vs, ve)
+	vs = skip_eaten_vowels(onset_end, vs, ve)
 	if vs < 1 then
 		p.struct_state = StructInvalid
 		return p.struct_state
+	end
+
+	local status, vnorms = detect_vowel_seq(word, wlen, vs, ve)
+	if status == VowelSeqStatus.Invalid then
+		p.struct_state = StructInvalid
+		return p.struct_state
+	elseif status == VowelSeqStatus.Ambiguous then
+		p.struct_state = StructShapeReady
 	end
 
 	if not validate_coda(word, wlen, ve) then
@@ -507,8 +496,7 @@ function WordEngine:analyze_structure(force)
 
 	p.tone_mark, p.tone_mark_idx = detect_tone_mark(word, wlen, vs, ve)
 	p.vowel_shift = vs - onset_end
-	p.vowel_start = vs
-	p.vowel_end = ve
+	p.vowel_start, p.vowel_end = vs, ve
 	p.vnorms = vnorms
 	p.struct_state = StructValid
 	return p.struct_state
@@ -516,11 +504,11 @@ end
 
 --- Removes the tone mark from the main vowel in the word
 --- @param self WordEngine The WordEngine instance
+--- @param p PrivateWordEngineFields The private fields of the WordEngine instance
 --- @param method_config table|nil The method configuration to use for tone removal
 --- @return boolean True if the tone mark was removed, false otherwise
 ---@diagnostic disable-next-line: unused-local
-local function remove_tone(self, method_config)
-	local p = _privates[self]
+local function remove_tone(self, p, method_config)
 	local word, tone, tidx = p.word, p.tone_mark, p.tone_mark_idx
 	if not tone then
 		self:input_key()
@@ -534,12 +522,11 @@ end
 
 --- Processes tone marks in the word
 --- @param self WordEngine The WordEngine instance
+--- @param p PrivateWordEngineFields The private fields of the WordEngine instance
 --- @param method_config table The method configuration to use for processing tones
 --- @param tone_stragegy ToneStrategy The strategy to use for finding the main vowel position, defaults to "modern"
 --- @return boolean True if the tone mark was processed, false otherwise
-local function processes_tone(self, method_config, tone_stragegy)
-	local p = _privates[self]
-
+local function processes_tone(self, p, method_config, tone_stragegy)
 	local inserted_key, inserted_idx = p.inserted_key, p.inserted_idx
 	if not inserted_key then
 		return false
@@ -619,9 +606,7 @@ local function collect_effects(chars, vs, ve, key, method_config)
 	return effects, ecount
 end
 
-local function processes_shape(self, method_config, tone_stragegy)
-	local p = _privates[self]
-
+local function processes_shape(self, p, method_config, tone_stragegy)
 	local word, wlen, vs, ve, inidx = p.word, p.wlen, p.vowel_start, p.vowel_end, p.inserted_idx
 
 	local effects, ecount = collect_effects(word, vs, ve, p.inserted_key, method_config)
@@ -631,8 +616,7 @@ local function processes_shape(self, method_config, tone_stragegy)
 	elseif ecount > 1 then
 		local u, o = effects[1], effects[2]
 		local uidx, oidx = u.idx, o.idx
-		local lv1u = level(u.char, 1)
-		local lv1o = level(o.char, 1)
+		local lv1u, lv1o = level(u.char, 1), level(o.char, 1)
 
 		local dual_horn = oidx < wlen -- must have the coda
 			and oidx - uidx == 1 -- must be adjacent
@@ -668,7 +652,7 @@ local function processes_shape(self, method_config, tone_stragegy)
 		end
 
 		-- sort by had shape
-		util.insertion_sort(effects, ecount, function(a, b)
+		util.isort_b2(effects, ecount, function(a, b)
 			if a.curr_shape and not b.curr_shape then
 				return true
 			elseif not a.curr_shape and b.curr_shape then
@@ -727,11 +711,11 @@ function WordEngine:processes_diacritic(method_config, tone_stragegy)
 
 	---@cast inkey string
 	if mc_util.is_tone_removal_key(inkey, method_config) then
-		return remove_tone(self, method_config)
+		return remove_tone(self, p, method_config)
 	elseif mc_util.is_shape_key(inkey, method_config) then
-		return processes_shape(self, method_config, tone_stragegy)
+		return processes_shape(self, p, method_config, tone_stragegy)
 	elseif mc_util.is_tone_key(inkey, method_config) then
-		return processes_tone(self, method_config, tone_stragegy)
+		return processes_tone(self, p, method_config, tone_stragegy)
 	end
 	return false
 end

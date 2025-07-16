@@ -506,19 +506,17 @@ end
 --- Check if a sequence of characters is a potential vowel sequence
 --- @param chars table The character Table
 --- @param chars_size integer The size of the character Table
---- @param min_seq_len integer The minimum length of the vowel sequence
---- @param max_seq_len integer The maximum length of the vowel sequence @param strict boolean If true, checks for strict Vietnamese vowels (no accept tone char like "á", "à", etc.)
 --- @param strict boolean|nil If true, checks for strict Vietnamese vowels (no accept tone char like "á", "à", etc.)
 --- @return boolean True if the sequence is a potential vowel sequence, false otherwise
-function M.is_potiental_vowel_seq(chars, chars_size, min_seq_len, max_seq_len, strict)
+function M.is_potiental_vowel_seq(chars, chars_size, strict)
 	-- assert(chars_size and chars_size > 0, "chars_size must not be nil or less than 1")
 
 	local start, stop = M.find_vowel_seq_bounds(chars, chars_size)
-	local len = M.caculate_distance(start, stop)
-	if len < min_seq_len or len > max_seq_len then
+	local len = stop - start + 1
+	if len < 1 or len > 3 then
 		return false
-	elseif stop - 1 > start then
-		return M.all_vowels(chars, chars_size, strict, start + 1, stop - 1)
+	elseif len == 3 then
+		return is_vietnamese_vowel(chars[start + 1], strict)
 	end
 	return true
 end
@@ -638,12 +636,18 @@ function M.is_d(char)
 	return char == "d" or char == "đ" or char == "D" or char == "Đ"
 end
 
-function M.insertion_sort(list, list_size, comparator)
+function M.isort_b2(list, list_size, cmp)
+	if list_size == 2 then
+		if cmp(list[1], list[2]) then
+			list[1], list[2] = list[2], list[1]
+		end
+	end
+
 	for i = 2, list_size do
 		local key = list[i]
 		local j = i - 1
 
-		while j > 0 and comparator(list[j], key) do
+		while j > 0 and cmp(list[j], key) do
 			list[j + 1] = list[j]
 			j = j - 1
 		end

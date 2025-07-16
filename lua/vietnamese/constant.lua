@@ -37,7 +37,7 @@ local Diacritic = {
 		return diacritic == nil or diacritic == 0
 	end,
 }
-local DIACRITIC_FLAT = Diacritic.Flat
+-- local DIACRITIC_FLAT = Diacritic.Flat
 local DIACRITIC_ACUTE = Diacritic.Acute
 local DIACRITIC_GRAVE = Diacritic.Grave
 local DIACRITIC_HOOK = Diacritic.Hook
@@ -287,9 +287,6 @@ M = {
 		["ay"] = { 0 },
 		["ây"] = { 0 },
 
-		["io"] = false, --transitional for gio, not a valid vowel
-		["iô"] = false, --transitional for giố, not a valid vowel
-		["iơ"] = false, --transitional for giờ, not a valid vowel
 		["ia"] = { 0 },
 		["ie"] = false, --transitional, not a valid vowel
 		["iê"] = { 1 },
