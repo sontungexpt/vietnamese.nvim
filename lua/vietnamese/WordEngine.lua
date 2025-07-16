@@ -6,7 +6,8 @@ local Diacritic = CONSTANT.Diacritic
 local util = require("vietnamese.util")
 local mc_util = require("vietnamese.util.method-config")
 
-local lower, concat_tight_range, level = util.lower, util.concat_tight_range, util.level
+local lower_char, concat_tight_range, level, byte_len =
+	util.lower_char, util.concat_tight_range, util.level, util.byte_len
 local tbl_insert = table.insert
 
 --- @enum StructState
@@ -170,8 +171,7 @@ end
 --- Returns the cursor position in the character list
 --- @return string the character at the cursor position
 function WordEngine:inserted_key()
-	local p = _privates[self]
-	return p.inserted_key or ""
+	return _privates[self].inserted_key
 end
 
 --- Processes the new vowel character at the cursor position
@@ -391,7 +391,7 @@ end
 ---@diagnostic disable-next-line: unused-local
 local function detect_vowel_seq(chars, chars_size, vowel_start, vowel_end)
 	if vowel_start == vowel_end then
-		return VowelSeqStatus.Valid, { [vowel_start] = level(chars[vowel_start], 2) }
+		return VowelSeqStatus.Valid, { [vowel_start] = lower_char(level(chars[vowel_start], 2)) }
 	end
 
 	-- convert the vowel to level 2 and store in a new layer with the same index in word
@@ -404,9 +404,9 @@ local function detect_vowel_seq(chars, chars_size, vowel_start, vowel_end)
 	local vnorms = {}
 	-- Check if the word has a tone-marked vowel
 	for i = vowel_start, vowel_end do
-		vnorms[i] = level(chars[i], 2)
+		vnorms[i] = lower_char(level(chars[i], 2))
 	end
-	local seq_map = VOWEL_SEQS[lower(concat_tight_range(vnorms, vowel_start, vowel_end))]
+	local seq_map = VOWEL_SEQS[concat_tight_range(vnorms, vowel_start, vowel_end)]
 
 	if seq_map == false then
 		return VowelSeqStatus.Ambiguous, vnorms
@@ -746,21 +746,12 @@ function WordEngine:processes_diacritic(method_config, tone_stragegy)
 	end
 	return false
 end
--- --- Checks if the word is a valid Vietnamese word
--- --- @return boolean True if the word is a valid Vietnamese word, false otherwise
--- function WordEngine:is_valid_vietnamese_word()
--- 	local p = _privates[self]
--- 	if p.word_len == 1 then
--- 		return util.is_vietnamese_vowel(p.word[1])
--- 	end
--- 	self:analyze_structure()
 
--- 	if p.vowel_start < 1 then
--- 		return false
--- 	end
-
--- 	return true
--- end
+--- Checks if the word is a valid Vietnamese word
+--- @return boolean True if the word is a valid Vietnamese word, false otherwise
+function WordEngine:is_valid_vietnamese_word()
+	return self:analyze_structure() == StructValid
+end
 
 --- Returns the cell boundaries of the cursor position
 --- @param cursor_cell_idx integer The current column position of the cursor
@@ -784,11 +775,11 @@ end
 --- @return integer stop The end byte offset boundary of the cursor position (exclusive)
 function WordEngine:col_bounds(cursor_col_byteoffset)
 	local p = _privates[self]
-	local raw, raw_len, csidx = p.raw, p.rawlen, p.cursor_idx
+	local raw, rawlen, csidx = p.raw, p.rawlen, p.cursor_idx
 
-	local start = cursor_col_byteoffset - #concat_tight_range(raw, 1, csidx - 1)
-	local stop = csidx > raw_len and cursor_col_byteoffset
-		or cursor_col_byteoffset + #concat_tight_range(raw, csidx, raw_len)
+	local start = cursor_col_byteoffset - byte_len(raw, rawlen, 1, csidx - 1)
+	local stop = csidx > rawlen and cursor_col_byteoffset
+		or cursor_col_byteoffset + byte_len(raw, rawlen, csidx, rawlen)
 
 	return start, stop
 end
@@ -798,14 +789,14 @@ end
 --- @return integer The updated column position of the cursor_col_byteoffset
 function WordEngine:get_curr_cursor_col(old_col)
 	local p = _privates[self]
-	local raw_len, word_len = p.rawlen, p.wlen
+	local rawlen, wlen = p.rawlen, p.wlen
 	local csidx = p.cursor_idx
-	local start = old_col - #concat_tight_range(p.raw, 1, csidx - 1)
+	local start = old_col - byte_len(p.raw, rawlen, 1, csidx - 1)
 
-	if word_len == raw_len then
-		return start + #concat_tight_range(p.word, 1, csidx - 1)
-	elseif word_len < raw_len then
-		return start + #concat_tight_range(p.word, 1, p.inserted_idx - 1)
+	if wlen == rawlen then
+		return start + byte_len(p.word, wlen, 1, csidx - 1)
+	elseif wlen < rawlen then
+		return start + byte_len(p.word, wlen, 1, p.inserted_idx - 1)
 	end
 	return old_col
 end

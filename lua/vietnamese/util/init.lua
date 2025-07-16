@@ -2,6 +2,7 @@ local vim = vim
 local api = vim.api
 local nvim_buf_get_text = api.nvim_buf_get_text
 local str_utf_pos = vim.str_utf_pos
+local string_char = string.char
 
 local CONSTANT = require("vietnamese.constant")
 local UTF8_VNCHAR_COMPONENT, DIACRITIC_MAP, VOWEL_PRIORITY =
@@ -119,13 +120,17 @@ end
 --- @return string: The lowercase version of the character
 local function lower_char(c)
 	local len = #c
-	if len == 1 or len == 4 then
-		return c:lower()
+	if len == 1 then
+		local byte = c:byte()
+		if byte > 64 and byte < 91 then
+			return string_char(byte + 32) -- Convert uppercase ASCII to lowercase
+		end
+		return c
 	elseif len == 2 or len == 3 then
 		local comp = UTF8_VNCHAR_COMPONENT[c]
-		return comp and comp.lo or c:lower()
-	elseif len == 0 then
-		return ""
+		return comp and comp.lo or c
+	elseif len == 0 or len == 4 then
+		return c
 	end
 	error("Invalid character length: " .. len .. " for character: " .. c)
 end
@@ -168,13 +173,17 @@ end
 --- @see M.upper
 local function upper_char(c)
 	local len = #c
-	if len == 1 or len == 4 then
+	if len == 1 then
+		local byte = c:byte()
+		if byte > 96 and byte < 123 then
+			return string_char(byte - 32) -- Convert lowercase ASCII to uppercase
+		end
 		return c:upper()
 	elseif len == 2 or len == 3 then
 		local comp = UTF8_VNCHAR_COMPONENT[c]
-		return comp and comp.up or c:upper()
-	elseif len == 0 then
-		return ""
+		return comp and comp.up or c
+	elseif len == 0 or len == 4 then
+		return c
 	end
 	error("Invalid character length: " .. len .. " for character: " .. c)
 end
@@ -639,6 +648,19 @@ function M.isort_b2(list, list_size, cmp)
 		list[j + 1] = key
 	end
 	return list
+end
+
+--- Calculate the byte length of a range of characters
+--- @param chars string[]: The character Table
+--- @param chars_size integer: The size of the character table
+--- @param i integer|nil: The starting index (1-based)
+--- @param j integer|nil: The ending index (1-based)
+function M.byte_len(chars, chars_size, i, j)
+	local len = 0
+	for k = i or 1, j or chars_size do
+		len = len + #chars[k]
+	end
+	return len
 end
 
 function M.benchmark(func, ...)

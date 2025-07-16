@@ -275,12 +275,10 @@ M.setup = function()
 				then
 					changed = word_engine:processes_diacritic(method_config, config.get_tone_strategy())
 				end
-
 				-- if not changed, then check the vowel
 				if not changed and is_vowel_pressed then
 					changed = word_engine:processes_new_vowel(method_config, config.get_tone_strategy())
 				end
-
 				-- if still not changed, then end
 				if not changed then
 					reset_state()
