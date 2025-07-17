@@ -33,7 +33,7 @@ local M = {
 
 	-- Check if a character is a valid input character to make a Vietnamese character
 	is_diacritic_pressed = function(char)
-		return char:lower():match("[`'?~.'%-j^(d+]") ~= nil
+		return char:lower():match("[`'?~.'0^(+d]") ~= nil
 	end,
 }
 

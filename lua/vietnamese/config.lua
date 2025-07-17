@@ -8,14 +8,14 @@ local SUPPORTED_METHODS = {
 	"viqr", -- VIQR input method
 }
 
----@enum ToneStrategy
-local ToneStrategy = {
+---@enum OrthographyStragegy
+local OrthographyStragegy = {
 	MODERN = "modern", -- Modern tone strategy
 	OLD = "old", -- Old tone strategy
 }
 
 local M = {
-	ToneStrategy = ToneStrategy, -- Export ToneStrategy for external use
+	OrthographyStragegy = OrthographyStragegy, -- Export ToneStrategy for external use
 }
 
 local curr_method_config = nil
@@ -24,7 +24,7 @@ local curr_method_config = nil
 local default_config = {
 	enabled = true,
 	-- "old" | "modern"
-	tone_strategy = ToneStrategy.MODERN, -- Default tone strategy
+	orthography = OrthographyStragegy.MODERN, -- Default tone strategy
 	input_method = "telex", -- Default input method
 	excluded = {
 		filetypes = {
@@ -40,14 +40,14 @@ local default_config = {
 	custom_methods = {}, -- Custom input methods
 }
 
-M.get_tone_strategy = function()
-	return default_config.tone_strategy
+M.get_orthography_stragegy = function()
+	return default_config.orthography
 end
 
 --- Set the tone strategy for Vietnamese input
---- @param strategy ToneStrategy The tone strategy to set
-M.set_tone_strategy = function(strategy)
-	default_config.tone_strategy = strategy
+--- @param strategy OrthographyStragegy The tone strategy to set
+M.set_orthography_stragegy = function(strategy)
+	default_config.orthography = strategy
 end
 
 M.is_enabled = function()
@@ -161,21 +161,11 @@ function M.get_method_config()
 end
 
 function M.is_excluded_filetype(filetype)
-	if type(filetype) ~= "string" then
-		return false
-	end
-
-	local excludes = default_config.excluded.filetypes or {}
-	return vim.tbl_contains(excludes, filetype)
+	return type(filetype) == "string" and vim.list_contains(default_config.excluded.filetypes, filetype)
 end
 
 function M.is_excluded_buftype(buftype)
-	if type(buftype) ~= "string" then
-		return false
-	end
-
-	local excludes = default_config.excluded.buftypes or {}
-	return vim.tbl_contains(excludes, buftype)
+	return type(buftype) == "string" and vim.list_contains(default_config.excluded.buftypes, buftype)
 end
 
 function M.get_support_methods()

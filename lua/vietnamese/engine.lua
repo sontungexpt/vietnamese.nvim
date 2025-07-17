@@ -4,7 +4,6 @@ local nvim_win_get_cursor, nvim_win_set_cursor, nvim_buf_set_text, nvim_buf_get_
 	api.nvim_win_get_cursor, api.nvim_win_set_cursor, api.nvim_buf_set_text, api.nvim_buf_get_text
 
 local util = require("vietnamese.util")
-local config = require("vietnamese.config")
 
 local is_vietnamese_char, reverse_list, iter_chars, iter_chars_reverse =
 	util.is_vietnamese_char, util.reverse_list, util.iter_chars, util.iter_chars_reverse
@@ -140,25 +139,27 @@ M.find_vnword_under_cursor = find_vnword_under_cursor
 M.setup = function()
 	local GROUP = api.nvim_create_augroup("VietnameseEngine", { clear = true })
 	local NAMESPACE = api.nvim_create_namespace("VietnameseEngine")
+
+	--- module
+	local config = require("vietnamese.config")
 	local system_ime = require("vietnamese.system-ime")
 	local bim_ok, bim_handler = pcall(require, "bim.handler")
 
+	--- state
 	local inserted_char = ""
-	local inserted_idx = 0
-	local inserting = false
-	local delete_pressed = false
 	local working_bufnr = -1
 
-	local cword, cwlen = nil, 0
+	local cword, cwlen, inserted_idx = nil, 0, 0
+
+	local inserting = false
+	local delete_pressed = false
+
 	local is_vowel_pressed = false
 	local is_diacritic_key_pressed = false
 
 	local reset_state = function()
 		cword, cwlen, inserted_idx = nil, 0, 0
-		inserted_char = ""
-		is_vowel_pressed = false
-		is_diacritic_key_pressed = false
-		working_bufnr = -1
+		is_vowel_pressed, is_diacritic_key_pressed = false, false
 	end
 
 	local function register_onkey(cb, opts)
@@ -190,6 +191,16 @@ M.setup = function()
 		end,
 	})
 
+	local function is_backspace(key)
+		local b1, b2, b3 = string.byte(key, 1, 3)
+		return b1 == 128 and b2 == 107 and b3 == 98
+	end
+
+	local function is_delete(key)
+		local b1, b2, b3 = string.byte(key, 1, 3)
+		return b1 == 128 and b2 == 107 and b3 == 68
+	end
+
 	--- Why not handle all logic in vim.onkey?
 	--- > Because we don't want it change the behavior of InsertCharPre autocmd
 	--- > If handle all on onkey we need to return "" for some case
@@ -202,8 +213,8 @@ M.setup = function()
 			if config.is_enabled() and config.is_buf_enabled(args.buf) and args.event == "InsertEnter" then
 				---@diagnostic disable-next-line: unused-local
 				register_onkey(function(key, typed)
+					delete_pressed = is_backspace(typed) or is_delete(typed)
 					inserted_char = typed
-					delete_pressed = typed == "\b" or typed == "\x7f"
 				end)
 			else
 				unregister_onkey()
@@ -273,11 +284,11 @@ M.setup = function()
 					and word_engine:is_potential_diacritic_key(method_config)
 					and word_engine:is_potential_vnword()
 				then
-					changed = word_engine:processes_diacritic(method_config, config.get_tone_strategy())
+					changed = word_engine:processes_diacritic(method_config, config.get_orthography_stragegy())
 				end
 				-- if not changed, then check the vowel
 				if not changed and is_vowel_pressed then
-					changed = word_engine:processes_new_vowel(method_config, config.get_tone_strategy())
+					changed = word_engine:processes_new_vowel(method_config, config.get_orthography_stragegy())
 				end
 				-- if still not changed, then end
 				if not changed then

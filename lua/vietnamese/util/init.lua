@@ -477,7 +477,7 @@ end
 --- @return integer first The index of the first vowel (1-based)
 --- @return integer last The index of the last vowel (1-based)
 --- @return boolean is_single True if the first and last vowels are the same (single vowel), false otherwise
-function M.find_vowel_seq_bounds(chars, chars_size)
+local function find_vowel_seq_bounds(chars, chars_size)
 	local first, last = -1, -2
 
 	-- Find the first and last vowel in the character table
@@ -497,6 +497,7 @@ function M.find_vowel_seq_bounds(chars, chars_size)
 	end
 	return first, last, first == last
 end
+M.find_vowel_seq_bounds = find_vowel_seq_bounds
 
 --- Check if a sequence of characters is a potential vowel sequence
 --- @param chars table The character Table
@@ -504,14 +505,13 @@ end
 --- @param strict boolean|nil If true, checks for strict Vietnamese vowels (no accept tone char like "á", "à", etc.)
 --- @return boolean True if the sequence is a potential vowel sequence, false otherwise
 function M.is_potential_vowel_seq(chars, chars_size, strict)
-	local start, stop = M.find_vowel_seq_bounds(chars, chars_size)
+	local start, stop = find_vowel_seq_bounds(chars, chars_size)
 	local len = stop - start + 1
 	if len < 1 or len > 3 then
 		return false
-	elseif len == 3 then
-		return is_vietnamese_vowel(chars[start + 1], strict)
 	end
-	return true
+
+	return len == 3 and is_vietnamese_vowel(chars[start + 1], strict) or true
 end
 
 --- Check if at least one character in the list is a Vietnamese vowel
@@ -555,7 +555,7 @@ local two_repetition_chars = {
 }
 local function get_max_repetition_time(char)
 	if char == nil or char == "" then
-		return char, 0
+		return "", 0
 	end
 	local lv1_c = lower_char(level(char, 1))
 	return lv1_c, two_repetition_chars[lv1_c] and 2 or 1
@@ -630,6 +630,11 @@ function M.is_d(char)
 	return char == "d" or char == "đ" or char == "D" or char == "Đ"
 end
 
+--- Sort a list using insertion sorts
+--- @param list table: The list to sort
+--- @param list_size integer: The size of the list to sort
+--- @param cmp function: A comparison function that takes two elements and returns true if the first element should come after the second
+--- @return table sorted_list The sorted list
 function M.isort_b2(list, list_size, cmp)
 	if list_size == 2 then
 		if cmp(list[1], list[2]) then

@@ -1,6 +1,6 @@
 ---@class Config
 ---@field enabled boolean Whether Vietnamese input is is_enabled
----@field tone_strategy ToneStrategy Tone tone_strategy
+---@field orthography OrthographyStragegy Tone tone_strategy
 ---@field input_method string Input method to use
 ---@field excluded {filetypes: table, buftypes: table} Excluded filetypes and buftypes
 ---@field custom_methods table Custom input methods

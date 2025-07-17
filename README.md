@@ -57,18 +57,20 @@ Bạn có thể tùy chỉnh \`telex\`, \`vni\`, hoặc các nút xoá dấu tro
 
 ```lua
 require("vietnamese").setup({
-    enabled = true, -- Bật plugin
-    input_method = "telex", -- Hoặc "vni" (hiện tại chỉ hỗ trợ telex đơn giản)
+    enabled = true,
+    -- "old" | "modern"
+    orthography = "modern", -- Default tone strategy
+    input_method = "telex", -- Default input method
     excluded = {
         filetypes = {
-            "nvimtree", -- Loại filetypes
+            "nvimtree", -- File types to exclude
             "help",
         }, -- File types to exclude
         buftypes = {
             "nowrite",
             "quickfix",
             "prompt",
-        }, -- Loại buffer types
+        }, -- Buffer types to excludek
     },
     custom_methods =
         -- Tự tạo riêng intput methods của mình

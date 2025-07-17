@@ -56,8 +56,8 @@ WordEngine.__index = WordEngine
 --- @field vowel_start integer (after analysis) Index of the start of the vowel cluster (1-based)
 --- @field vowel_end integer (after analysis) Index of the end of the vowel cluster (1-based)
 --- @field vowel_shift integer (after analysis) Offset if the onset overlaps with the vowel cluster
---- @field vnorms table|nil (after analysis) --- Normalized vowel sequence layer, mapping indices to normalized vowels example: for word = { "d", "a", "o" } -- normalized_vowel_layer = { [1] = nil, [2] = "a", [3] = "o" }
---- @field tone_mark Diacritic? (after analysis) The tone mark of the main vowel if it has one
+--- @field vnorms table|nil (after analysis) --- Normalized vowel sequence layer, mapping indices to normalized vowels example: for word = { "d", "a", "o" } -- normalized_vowel_layer = { [1] = nil, [2] = "a", [3] = "o" }. All chars is lowercase
+--- @field tone_mark Diacritic|nil (after analysis) The tone mark of the main vowel if it has one
 --- @field tone_mark_idx integer (after analysis) The index of the tone mark in the word (1-based)
 local _privates = setmetatable({}, { __mode = "k" }) --- @type table<WordEngine, PrivateWordEngineFields>
 
@@ -108,7 +108,7 @@ function WordEngine:new(cword, cwlen, inserted_key, inserted_idx)
 		vowel_start = -1,
 		vowel_end = -2, -- -2 to make sure that it is not valid when loop from start to end
 		vowel_shift = 0, -- adjust the vowel start index if the onset overlaps with the vowel
-		vnorms = nil,
+		vnorms = nil, -- normalized vowel sequence layer, mapping indices to normalized vowels
 	}
 
 	return obj
@@ -176,7 +176,7 @@ end
 
 --- Processes the new vowel character at the cursor position
 --- @param method_config table the method configuration to use for processing
---- @param tone_stragegy ToneStrategy the strategy to use for finding the main vowel position, defaults to "modern"
+--- @param tone_stragegy OrthographyStragegy the strategy to use for finding the main vowel position, defaults to "modern"
 function WordEngine:processes_new_vowel(method_config, tone_stragegy)
 	local p = _privates[self]
 	local raw, inidx = p.raw, p.inserted_idx
@@ -236,7 +236,7 @@ end
 ----- Updates the position of the tone mark in the word
 ---# @param self WordEngine The WordEngine instance
 --- @param method_config table|nil The method configuration to use for updating the tone mark position
---- @param tone_stragegy ToneStrategy The strategy to use for finding the main vowel position, defaults to "modern"
+--- @param tone_stragegy OrthographyStragegy The strategy to use for finding the main vowel position, defaults to "modern"
 --- @return boolean changed true if the tone mark position was updated, false otherwise
 ---@diagnostic disable-next-line: unused-local
 function WordEngine:update_tone_pos(method_config, tone_stragegy)
@@ -278,8 +278,9 @@ end
 local function find_old_tone_pos(word, wlen, vs, ve, vnorms)
 	local mvi = vs
 
+	-- triphthong
 	if ve - vs + 1 == 3 or ve < wlen then
-		mvi = vs + 1 -- triphthong
+		mvi = vs + 1
 	end
 
 	if not vnorms then
@@ -335,7 +336,7 @@ local function find_modern_tone_pos(word, wlen, vs, ve, vnorms)
 end
 
 --- Function to find main vowel
---- @param stragegy ToneStrategy the strategy to use for finding the main vowel
+--- @param stragegy OrthographyStragegy the strategy to use for finding the main vowel
 --- @param force_recheck boolean|nil whether to force recompute the position even it only had tone marked already
 --- @return string|nil the main vowel character if found, nil otherwise
 --- @return integer the index of the main vowel character if found, nil otherwise
@@ -551,7 +552,7 @@ end
 --- @param self WordEngine The WordEngine instance
 --- @param p PrivateWordEngineFields The private fields of the WordEngine instance
 --- @param method_config table The method configuration to use for processing tones
---- @param tone_stragegy ToneStrategy The strategy to use for finding the main vowel position, defaults to "modern"
+--- @param tone_stragegy OrthographyStragegy The strategy to use for finding the main vowel position, defaults to "modern"
 --- @return boolean True if the tone mark was processed, false otherwise
 local function processes_tone(self, p, method_config, tone_stragegy)
 	local inserted_key, inserted_idx = p.inserted_key, p.inserted_idx

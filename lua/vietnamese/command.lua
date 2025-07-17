@@ -19,10 +19,10 @@ end, {
 })
 
 nvim_create_user_command("VietnameseToneStragegy", function(args)
-	require("vietnamese.config").set_tone_strategy(args.args)
+	require("vietnamese.config").set_orthography_stragegy(args.args)
 end, {
 	nargs = 1,
 	complete = function()
-		return vim.tbl_values(require("vietnamese.config").ToneStrategy)
+		return vim.tbl_values(require("vietnamese.config").OrthographyStragegy)
 	end,
 })
