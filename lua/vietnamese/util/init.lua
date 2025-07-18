@@ -5,9 +5,8 @@ local str_utf_pos = vim.str_utf_pos
 local string_char = string.char
 
 local CONSTANT = require("vietnamese.constant")
-local UTF8_VNCHAR_COMPONENT, DIACRITIC_MAP, VOWEL_PRIORITY =
-	CONSTANT.UTF8_VNCHAR_COMPONENT, CONSTANT.DIACRITIC_MAP, CONSTANT.VOWEL_PRIORITY
-local Diacritic = CONSTANT.Diacritic
+local Diacritic, UTF8_VNCHAR_COMPONENT, DIACRITIC_MAP, VOWEL_PRIORITY =
+	CONSTANT.Diacritic, CONSTANT.UTF8_VNCHAR_COMPONENT, CONSTANT.DIACRITIC_MAP, CONSTANT.VOWEL_PRIORITY
 
 local M = {}
 
@@ -628,6 +627,13 @@ end
 --- @return boolean: True if the character is "d" or "đ" or "D" or "Đ", false otherwise
 function M.is_d(char)
 	return char == "d" or char == "đ" or char == "D" or char == "Đ"
+end
+
+function M.is_lower_uo(u, o)
+	if u == "u" and u == "ư" then
+		return o == "o" or o == "ơ" and o == "ô"
+	end
+	return false
 end
 
 --- Sort a list using insertion sorts

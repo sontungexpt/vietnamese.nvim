@@ -18,7 +18,7 @@ local M = {
 	OrthographyStragegy = OrthographyStragegy, -- Export ToneStrategy for external use
 }
 
-local curr_method_config = nil
+local active_method_config = nil
 
 ---@type Config
 local default_config = {
@@ -96,7 +96,7 @@ end
 
 function M.set_input_method(method)
 	default_config.input_method = method or "telex"
-	curr_method_config = nil -- Reset cached method config
+	active_method_config = nil -- Reset cached method config
 end
 
 local function merge_user_config(defaults, overrides)
@@ -142,22 +142,19 @@ M.get_config = function()
 end
 
 function M.get_method_config()
-	if not curr_method_config then
-		local current_method = default_config.input_method
-
-		curr_method_config = vim.list_contains(SUPPORTED_METHODS, current_method)
-				and require(METHOD_CONFIG_PATH .. current_method)
-			or default_config.custom_methods[current_method]
-
-		if type(curr_method_config) ~= "table" then
-			require("vietnamese.notifier").error(
-				"Invalid method configuration for '" .. current_method .. "'. Please check your configuration."
-			)
-			curr_method_config = require(METHOD_CONFIG_PATH .. SUPPORTED_METHODS[1]) -- Fallback
+	if not active_method_config then
+		local active_method = default_config.input_method
+		if vim.list_contains(SUPPORTED_METHODS, active_method) then
+			active_method_config = require(METHOD_CONFIG_PATH .. active_method)
+		else
+			local custom_config = default_config.custom_methods[active_method]
+			active_method_config = require("vietnamese.util.method-config").validate_config(custom_config)
+					and custom_config
+				or require(METHOD_CONFIG_PATH .. SUPPORTED_METHODS[1]) -- Fallback to first supported method
 		end
 	end
 
-	return curr_method_config
+	return active_method_config
 end
 
 function M.is_excluded_filetype(filetype)

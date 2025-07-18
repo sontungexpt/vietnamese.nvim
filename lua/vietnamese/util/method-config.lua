@@ -101,4 +101,41 @@ end
 function M.is_diacritic_applicable(diacritic_key, applied_char, method_config)
 	return M.get_diacritic(diacritic_key, applied_char, method_config) ~= nil
 end
+
+function M.validate_config(method_config)
+	local notifier = require("vietnamese.notifier")
+
+	if type(method_config) ~= "table" then
+		notifier.error("Method configuration must be a table.")
+		return false
+	end
+	-- tone key and shape key must be different
+	for key, _ in pairs(method_config.tone_keys) do
+		if method_config.shape_keys[key] then
+			notifier.error("Key '" .. key .. "' is both a tone key and a shape key in the method configuration.")
+			return false
+		end
+	end
+	for key, _ in pairs(method_config.shape_keys) do
+		if method_config.tone_keys[key] then
+			notifier.error("Key '" .. key .. "' is both a shape key and a tone key in the method configuration.")
+			return false
+		end
+	end
+
+	for key, _ in pairs(method_config.tone_removal_keys) do
+		if method_config.tone_keys[key] then
+			notifier.error("Key '" .. key .. "' is both a tone removal key and a tone key in the method configuration.")
+			return false
+		elseif method_config.shape_keys[key] then
+			notifier.error(
+				"Key '" .. key .. "' is both a tone removal key and a shape key in the method configuration."
+			)
+			return false
+		end
+	end
+
+	return true
+end
+
 return M
