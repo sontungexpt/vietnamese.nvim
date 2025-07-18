@@ -2,7 +2,7 @@ local util = require("vietnamese.util")
 local level = util.level
 
 local CONSTANT = require("vietnamese.constant")
-local DIACRITIC_MAP = CONSTANT.DIACRITIC_MAP
+local Diacritic, DIACRITIC_MAP = CONSTANT.Diacritic, CONSTANT.DIACRITIC_MAP
 
 local M = {}
 
@@ -93,7 +93,7 @@ function M.get_diacritic(key, affected_char, method_config, strict)
 	if diacritic then
 		return diacritic
 	elseif is_tone_removal_key(key, method_config) and util.has_tone_marked(affected_char) then
-		return CONSTANT.Diacritic.Flat
+		return Diacritic.Flat
 	end
 	return nil
 end
@@ -130,6 +130,21 @@ function M.validate_config(method_config)
 		elseif method_config.shape_keys[key] then
 			notifier.error(
 				"Key '" .. key .. "' is both a tone removal key and a shape key in the method configuration."
+			)
+			return false
+		end
+	end
+
+	-- if u or o is map with horn, then both u o is map for that key
+	for key, shape_map in pairs(method_config.shape_keys) do
+		if shape_map["u"] == Diacritic.Horn and shape_map["o"] ~= Diacritic.Horn then
+			notifier.error(
+				"Both 'u' and 'o' must be mapped to the same Horn for key '" .. key .. "' in the method configuration."
+			)
+			return false
+		elseif shape_map["o"] == Diacritic.Horn and shape_map["u"] ~= Diacritic.Horn then
+			notifier.error(
+				"Both 'u' and 'o' must be mapped to the same Horn for key '" .. key .. "' in the method configuration."
 			)
 			return false
 		end

@@ -1,7 +1,6 @@
 local CONSTANT = require("vietnamese.constant")
-local ONSETS, CODAS, VOWEL_SEQS, VOWEL_PRIORITY =
-	CONSTANT.ONSETS, CONSTANT.CODAS, CONSTANT.VOWEL_SEQS, CONSTANT.VOWEL_PRIORITY
-local Diacritic = CONSTANT.Diacritic
+local Diacritic, ONSETS, CODAS, VOWEL_SEQS, VOWEL_PRIORITY =
+	CONSTANT.Diacritic, CONSTANT.ONSETS, CONSTANT.CODAS, CONSTANT.VOWEL_SEQS, CONSTANT.VOWEL_PRIORITY
 
 local util = require("vietnamese.util")
 local mc_util = require("vietnamese.util.method-config")
@@ -592,7 +591,7 @@ end
 --- @param ve integer The index of the last vowel (1-based)
 --- @param inkey string The character at the cursor position
 --- @param method_config table The method configuration to use for shape diacritics
---- @return table<integer,{idx: integer, no_shape_char: string, curr_shape: Diacritic, char: string, applying_shape:Diacritic }> effects A table of effects, each effect is a table with the following fields:
+--- @return table<integer,{idx: integer, char_without_shape: string, existing_shape: Diacritic, char: string, target_shape:Diacritic }> effects A table of effects, each effect is a table with the following fields:
 --- @return integer ecount The number of effects collected
 local function collect_effects(chars, vs, ve, inkey, inidx, method_config)
 	if inidx < 2 then -- no previous character to apply shape diacritic
@@ -607,13 +606,13 @@ local function collect_effects(chars, vs, ve, inkey, inidx, method_config)
 	local char1 = chars[1]
 	local horizontal_stroke = util.is_d(char1) and get_shape_diacritic(inkey, char1, method_config)
 	if horizontal_stroke then
-		local no_shape_char, curr_shape = strip_shape(char1)
+		local char_without_shape, existing_shape = strip_shape(char1)
 		effects[1] = {
 			idx = 1, -- index of the character in the word
 			char = char1, -- character itself
-			no_shape_char = no_shape_char, -- character without shape diacritic
-			curr_shape = curr_shape, -- current shape diacritic of the character
-			applying_shape = horizontal_stroke, -- diacritic to apply
+			char_without_shape = char_without_shape, -- character without shape diacritic
+			existing_shape = existing_shape, -- current shape diacritic of the character
+			target_shape = horizontal_stroke, -- diacritic to apply
 		}
 		return effects, 1
 	end
@@ -624,14 +623,14 @@ local function collect_effects(chars, vs, ve, inkey, inidx, method_config)
 		local c = chars[i]
 		local shape_diacritic = get_shape_diacritic(inkey, c, method_config)
 		if shape_diacritic then
-			local no_shape_char, curr_shape = strip_shape(c)
+			local char_without_shape, existing_shape = strip_shape(c)
 			ecount = ecount + 1
 			effects[ecount] = {
 				idx = i,
 				char = c,
-				no_shape_char = no_shape_char,
-				curr_shape = curr_shape,
-				applying_shape = shape_diacritic,
+				char_without_shape = char_without_shape,
+				existing_shape = existing_shape,
+				target_shape = shape_diacritic,
 			}
 		end
 	end
@@ -639,22 +638,12 @@ local function collect_effects(chars, vs, ve, inkey, inidx, method_config)
 end
 
 local function processes_shape(self, p, method_config, tone_stragegy)
-	local word, wlen, vs, ve, vnorms = p.word, p.wlen, p.vowel_start, p.vowel_end, p.vnorms
+	local word, wlen, vs, ve = p.word, p.wlen, p.vowel_start, p.vowel_end
 	local effects, ecount = collect_effects(word, vs, ve, p.inserted_key, p.inserted_idx, method_config)
 
 	if ecount == 0 then
 		return false -- no shape diacritic found
-	end
-
-	-- local vsp1 = vs + 1
-	-- local e1 = ecount[1]
-	-- local is_dual_horn = vsp1 < wlen
-	-- 	and vnorms
-	-- 	and util.is_lower_uo(vnorms[vs], vnorms[vsp1])
-	-- 	and e1.applying_shape == Diacritic.Horn --
-	-- 	and (e1.idx == vs or e1.idx == vsp1)
-
-	if ecount > 1 then
+	elseif ecount > 1 then
 		local u, o = effects[1], effects[2]
 		local uidx, oidx = u.idx, o.idx
 		local lv1u, lv1o = level(u.char, 1), level(o.char, 1)
@@ -664,13 +653,13 @@ local function processes_shape(self, p, method_config, tone_stragegy)
 			and (lv1u == "u" or lv1u == "U") -- must be a vowel
 			and (lv1o == "o" or lv1o == "O") -- must be a vowel
 			-- just need one of them to affect
-			and (u.applying_shape == Diacritic.Horn or o.applying_shape == Diacritic.Horn)
+			and (u.target_shape == Diacritic.Horn or o.target_shape == Diacritic.Horn)
 
 		if dual_horn then
-			if u.curr_shape == Diacritic.Horn and o.curr_shape == Diacritic.Horn then
+			if u.existing_shape == Diacritic.Horn and o.existing_shape == Diacritic.Horn then
 				-- restore the horn
-				word[uidx] = u.no_shape_char
-				word[oidx] = o.no_shape_char
+				word[uidx] = u.char_without_shape
+				word[oidx] = o.char_without_shape
 				self:input_key()
 				return true
 			end
@@ -692,9 +681,9 @@ local function processes_shape(self, p, method_config, tone_stragegy)
 
 		-- sort by had shape
 		util.isort_b2(effects, ecount, function(a, b)
-			if a.curr_shape and not b.curr_shape then
+			if a.existing_shape and not b.existing_shape then
 				return true
-			elseif not a.curr_shape and b.curr_shape then
+			elseif not a.existing_shape and b.existing_shape then
 				return false
 			end
 			return a.idx < b.idx
@@ -705,21 +694,21 @@ local function processes_shape(self, p, method_config, tone_stragegy)
 		local e = effects[i]
 		local e_idx = e.idx
 
-		if e.curr_shape == e.applying_shape then
+		if e.existing_shape == e.target_shape then
 			-- restore shape diacritic
-			word[e_idx] = e.no_shape_char
+			word[e_idx] = e.char_without_shape
 			self:input_key()
 			return true
 		elseif e_idx < vs or e_idx > ve then
 			-- case d character
 			-- e_idx < vs when had at least 1 vowel
 			-- e_idx > ve when had no vowel
-			word[e_idx] = util.merge_diacritic(e.char, e.applying_shape)
+			word[e_idx] = util.merge_diacritic(e.char, e.target_shape)
 			return true
 		end
 
 		-- in vowel sequence
-		word[e_idx] = util.merge_diacritic(e.char, e.applying_shape, true)
+		word[e_idx] = util.merge_diacritic(e.char, e.target_shape, true)
 		local status, new_vnorms = detect_vowel_seq(word, wlen, vs, ve)
 		if status == VowelSeqStatus.Valid then
 			p.vnorms = new_vnorms

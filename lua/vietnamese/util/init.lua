@@ -630,8 +630,8 @@ function M.is_d(char)
 end
 
 function M.is_lower_uo(u, o)
-	if u == "u" and u == "ư" then
-		return o == "o" or o == "ơ" and o == "ô"
+	if u == "u" or u == "ư" then
+		return o == "o" or o == "ơ" or o == "ô"
 	end
 	return false
 end
