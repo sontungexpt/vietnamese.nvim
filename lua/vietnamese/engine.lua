@@ -137,12 +137,11 @@ end
 M.find_vnword_under_cursor = find_vnword_under_cursor
 
 M.setup = function()
-	local GROUP = api.nvim_create_augroup("VietnameseEngine", { clear = true })
 	local NAMESPACE = api.nvim_create_namespace("VietnameseEngine")
+	local AUGROUP = require("vietnamese.constant").AUGROUP
 
 	--- module
 	local config = require("vietnamese.config")
-	local system_ime = require("vietnamese.system-ime")
 	local bim_ok, bim_handler = pcall(require, "bim.handler")
 
 	--- state
@@ -170,33 +169,18 @@ M.setup = function()
 		vim.on_key(nil, NAMESPACE)
 	end
 
-	--- disable system IME on startup
-	system_ime.disable()
-
-	api.nvim_create_autocmd({
-		--  "VimEnter", -- no need because we call in setup functoin
-		"FocusGained",
-		"FocusLost",
-		"VimLeave",
-	}, {
-		group = GROUP,
-		callback = function(args)
-			if not config.is_enabled() then
-				return
-			elseif args.event == "FocusGained" then
-				system_ime.disable()
-			else
-				system_ime.enable()
-			end
-		end,
-	})
-
 	local function is_backspace(key)
+		if #key ~= 3 then
+			return false
+		end
 		local b1, b2, b3 = string.byte(key, 1, 3)
 		return b1 == 128 and b2 == 107 and b3 == 98
 	end
 
 	local function is_delete(key)
+		if #key ~= 3 then
+			return false
+		end
 		local b1, b2, b3 = string.byte(key, 1, 3)
 		return b1 == 128 and b2 == 107 and b3 == 68
 	end
@@ -208,7 +192,7 @@ M.setup = function()
 	--- Not only that it will have more strange behavior with buffer because the onkey may execute
 	--- before buffer is ready
 	api.nvim_create_autocmd({ "InsertEnter", "InsertLeave" }, {
-		group = GROUP,
+		group = AUGROUP,
 		callback = function(args)
 			if config.is_enabled() and config.is_buf_enabled(args.buf) and args.event == "InsertEnter" then
 				---@diagnostic disable-next-line: unused-local
@@ -221,11 +205,12 @@ M.setup = function()
 			end
 		end,
 	})
+
 	api.nvim_create_autocmd({
 		"InsertCharPre",
 		"TextChangedI",
 	}, {
-		group = GROUP,
+		group = AUGROUP,
 		callback = function(args)
 			local bufnr = args.buf
 			if not config.is_enabled() or not config.is_buf_enabled(bufnr) then

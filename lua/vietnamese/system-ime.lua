@@ -112,4 +112,29 @@ M.disable = function()
 	end
 end
 
+M.setup = function()
+	local config = require("vietnamese.config")
+
+	--- disable system IME on startup
+	M.disable()
+
+	vim.api.nvim_create_autocmd({
+		--  "VimEnter", -- no need because we call in setup functoin
+		"FocusGained",
+		"FocusLost",
+		"VimLeave",
+	}, {
+		group = require("vietnamese.constant").AUGROUP,
+		callback = function(args)
+			if not config.is_enabled() then
+				return
+			elseif args.event == "FocusGained" then
+				M.disable()
+			else
+				M.enable()
+			end
+		end,
+	})
+end
+
 return M

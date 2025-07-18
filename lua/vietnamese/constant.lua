@@ -49,6 +49,7 @@ local DIACRITIC_HORN = Diacritic.Horn
 local DIACRITIC_HORIZONTAL_STROKE = Diacritic.HorizontalStroke
 
 M = {
+	AUGROUP = vim.api.nvim_create_augroup("vietnamese.nvim", { clear = true }),
 	Diacritic = Diacritic,
 	--- @type table<string, number>
 	--- VOWEL_ACCENT_PRIORITY maps Vietnamese vowels with accents to their priority.
