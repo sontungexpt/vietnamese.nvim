@@ -25,16 +25,16 @@
 
 ```lua
 {
-    "sontungexpt/vietnamese.nvim",
-    dependencies = {
-        -- if you want to map jj or any key to escape
-        "sontungexpt/bim.nvim",
-    },nvim-web-devicons
-    event = "InsertEnter",
-    config = function(
-        require("vietnamese").setup()
-    end,
-}
+          "sontungexpt/vietnamese.nvim",
+          dependencies = {
+            "sontungexpt/bim.nvim",
+            "nvim-web-devicons",
+          },
+          event = "InsertEnter",
+          config = function()
+            require("vietnamese").setup()
+          end,
+        },
 ```
 
 **Packer.nvim:**
