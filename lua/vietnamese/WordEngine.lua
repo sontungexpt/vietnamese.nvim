@@ -133,14 +133,14 @@ end
 --- Check if the word is a potential Vietnamese word
 --- @return boolean potential true if the word is a potential Vietnamese word
 function WordEngine:is_potential_vnword()
-	local word, word_len = self.chars, self.char_count
-	if word_len > 1 then
+	local chars, char_count = self.chars, self.char_count
+	if char_count > 1 then
 		local vs, ve = nil, nil
 		local tone_found = false
 		local left_times = {}
 
-		for i = 1, word_len do
-			local c = word[i]
+		for i = 1, char_count do
+			local c = chars[i]
 			if Codec.is_vn_vowel(c) then
 				vs, ve = vs or i, i
 			end
@@ -154,17 +154,27 @@ function WordEngine:is_potential_vnword()
 			end
 
 			--- Check max repetition times of each character
-			local b = byte(c)
+			local b1, b2 = byte(c, 1, 2)
+			if b2 then -- more than 1 byte
+				-- Convert to Unicode letter
+				b1, b2 = byte(Codec.base_lower(c), 1, 2)
+				if b2 then
+					-- Still not a Unicode letter
+					return false
+				end
+			end
 			--- if uppercase then convert to lowercase
-			if b > 64 and b < 91 then
-				b = b + 32
-			elseif b < 97 or b > 122 then -- not a letter
+			if b1 > 64 and b1 < 91 then
+				b1 = b1 + 32 -- convert to lowercase
+			elseif b1 < 97 or b1 > 122 then -- not a letter
+				-- Not a Unicode letter
 				return false
 			end
-			if left_times[b] == 0 then
+			if left_times[b1] == 0 then
+				-- No more repetitions time allowed
 				return false
 			end
-			left_times[b] = (left_times[b] or (BitMask.is_marked(R2_MASK, b - 97) and 2 or 1)) - 1
+			left_times[b1] = (left_times[b1] or (BitMask.is_marked(R2_MASK, b1 - 97) and 2 or 1)) - 1
 		end
 
 		--- Check the length of the vowel sequence
@@ -172,7 +182,7 @@ function WordEngine:is_potential_vnword()
 			return false
 		end
 		local v_seq_len = ve - vs + 1
-		if (v_seq_len == 3 and not Codec.is_vn_vowel(word[vs + 1])) or v_seq_len < 1 or v_seq_len > 3 then
+		if v_seq_len < 1 or v_seq_len > 3 or (v_seq_len == 3 and not Codec.is_vn_vowel(chars[vs + 1])) then
 			return false
 		end
 	end

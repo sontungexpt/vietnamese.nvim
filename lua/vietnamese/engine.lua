@@ -31,12 +31,11 @@ end
 --- Get valid Vietnamese characters to the **left** of the cursor.
 --- It fetches chunks of text from the left side, expanding by THRESHOLD_WORD_LEN each time.
 --- It collects characters that are valid Vietnamese letters and stops when a non-Vietnamese char is found.
---- If the cursor is at the tail of a Vietnamese word, it includes the cursor character.
---- @param bufnr number: Buffer number
---- @param row_0based number: Cursor row (0-based)
---- @param col_0based number: Cursor column (0-based)
---- @return table: Reversed list of left characters (from closest to furthest from cursor)
---- @return number: Length of left_chars collected
+--- @param bufnr integer: Buffer number
+--- @param row_0based integer: Cursor row (0-based)
+--- @param col_0based integer: Cursor column (0-based)
+--- @return string[] chars List of left characters (from closest to furthest from cursor)
+--- @return integer size Length of left_chars collected
 local function collect_left_chars(bufnr, row_0based, col_0based)
 	-- Get the text from start_col to end_col
 	local text_chunk = nvim_buf_get_text(
@@ -51,34 +50,31 @@ local function collect_left_chars(bufnr, row_0based, col_0based)
 		return {}, 0
 	end
 
-	local collected_chars = {} -- Table to store characters we collect
-	local count = 0 -- Length of the left_chars_reversed table
-
+	local chars, n = {}, 0 -- Table to store characters we collect
 	for _, ch in iter_chars_reverse(text_chunk) do
 		if is_vn_char(ch) then
-			count = count + 1
-			collected_chars[count] = ch
+			n = n + 1
+			chars[n] = ch
 		else
 			break -- Stop collecting if we hit a non-Vietnamese character
 		end
 
-		if count == THRESHOLD_WORD_LEN then
+		if n == THRESHOLD_WORD_LEN then
 			break
 		end
 	end
 
-	return reverse_list(collected_chars, count), count
+	return reverse_list(chars, n), n
 end
 
---- Get the character under cursor and valid Vietnamese characters to the **right**.
--- Reads the buffer line from cursor and moves rightward batch by batch.
--- Stops at first non-Vietnamese character or when THRESHOLD is reached.
--- @param bufnr number: Buffer number
--- @param row_0based number: Row of cursor (0-indexed)
--- @param col_0based number: Column of cursor (0-indexed)
--- @return table: List of valid Vietnamese characters to the right
--- @return number: Number of right characters
--- @return string: Character directly under the cursor
+--- Get valid Vietnamese characters to the **right** of the cursor.
+--- It fetches chunks of text from the right side, expanding by THRESHOLD_WORD_LEN each time.
+--- It collects characters that are valid Vietnamese letters and stops when a non-Vietnamese char is found.
+--- @param bufnr integer: Buffer number
+--- @param row_0based integer: Cursor row (0-based)
+--- @param col_0based integer: Cursor column (0-based)
+--- @return string[] chars List of right characters (from closest to furthest from cursor)
+--- @return integer size Length of right_chars collected
 local function collect_right_chars_from_cursor(bufnr, row_0based, col_0based)
 	local text_chunk =
 		nvim_buf_get_text(bufnr, row_0based, col_0based, row_0based, col_0based + WORST_CASE_WORD_LEN, {})[1]
@@ -86,29 +82,31 @@ local function collect_right_chars_from_cursor(bufnr, row_0based, col_0based)
 		return {}, 0
 	end
 
-	local collected_chars = {}
-	local count = 0
+	local chars, n = {}, 0
 	for _, ch in iter_chars(text_chunk) do
 		if is_vn_char(ch) then
-			count = count + 1
-			collected_chars[count] = ch
+			n = n + 1
+			chars[n] = ch
 		else
 			break -- Stop collecting if we hit a non-Vietnamese character
 		end
-		if count == THRESHOLD_WORD_LEN then
+		if n == THRESHOLD_WORD_LEN then
 			break -- Stop if we reach the threshold
 		end
 	end
 
-	return collected_chars, count
+	return chars, n
 end
 
 --- Main function to extract a processable Vietnamese word under cursor.
 --- Combines characters from left of the cursor, the cursor character itself, and characters to the right.
 --- Checks thresholds and rules to avoid collecting too many characters or empty segments.
---- @param bufnr number: Buffer number
---- @param row_0based number: Row of the cursor (0-based)
---- @param col_0based number: Column of the cursor (0-based)
+--- @param bufnr integer Buffer number
+--- @param row_0based integer Row of the cursor (0-based)
+--- @param col_0based integer Column of the cursor (0-based)
+--- @return string[]|nil chars List of characters in the word
+--- @return integer size Length of the word
+--- @return integer start_idx Index of the inserted character
 local function find_vnword_under_cursor(bufnr, row_0based, col_0based)
 	-- Get both sides of the word
 	local left_chars, left_len = collect_left_chars(bufnr, row_0based, col_0based)
@@ -118,22 +116,25 @@ local function find_vnword_under_cursor(bufnr, row_0based, col_0based)
 
 	local right_chars, right_len = collect_right_chars_from_cursor(bufnr, row_0based, col_0based)
 
-	local word_len = left_len + right_len
-	if word_len >= THRESHOLD_WORD_LEN then
+	local char_count = left_len + right_len
+	if char_count >= THRESHOLD_WORD_LEN then
 		return nil, 0, 0
 	end
 
 	--- combine right to left to get full word
-	local word_chars = left_chars
+	local chars = left_chars
 	for i = 1, right_len do
-		word_chars[left_len + i] = right_chars[i]
+		chars[left_len + i] = right_chars[i]
 	end
 
-	return word_chars, word_len, left_len + 1
+	return chars, char_count, left_len + 1
 end
 M.find_vnword_under_cursor = find_vnword_under_cursor
 
-local function do_without_events(events, fn)
+--- Calls a function without triggering events
+--- @param events string The events to ignore
+--- @param fn function The function to call
+local do_without_events = function(events, fn)
 	local old = o.eventignore
 	o.eventignore = events
 	fn()
@@ -173,19 +174,13 @@ M.setup = function()
 	end
 
 	local function is_backspace(key)
-		if #key ~= 3 then
-			return false
-		end
-		local b1, b2, b3 = string.byte(key, 1, 3)
-		return b1 == 128 and b2 == 107 and b3 == 98
+		local b1, b2, b3, b4 = string.byte(key, 1, 4)
+		return b1 == 128 and b2 == 107 and b3 == 98 and b4 == nil
 	end
 
 	local function is_delete(key)
-		if #key ~= 3 then
-			return false
-		end
-		local b1, b2, b3 = string.byte(key, 1, 3)
-		return b1 == 128 and b2 == 107 and b3 == 68
+		local b1, b2, b3, b4 = string.byte(key, 1, 4)
+		return b1 == 128 and b2 == 107 and b3 == 68 and b4 == nil
 	end
 
 	--- Why not handle all logic in vim.onkey?
@@ -292,7 +287,9 @@ M.setup = function()
 
 				local wstart, wend = word_engine:col_bounds(col_0based)
 
-				nvim_buf_set_text(0, row_0based, wstart, row_0based, wend, { new_word })
+				do_without_events("TextChanged,TextChangedI", function()
+					nvim_buf_set_text(0, row_0based, wstart, row_0based, wend, { new_word })
+				end)
 
 				local new_cursor_col = word_engine:get_curr_cursor_col(col_0based)
 
