@@ -1,12 +1,14 @@
 local vim, type = vim, type
-local api, v = vim.api, vim.v
+local api, v, o = vim.api, vim.v, vim.o
 local nvim_win_get_cursor, nvim_win_set_cursor, nvim_buf_set_text, nvim_buf_get_text =
 	api.nvim_win_get_cursor, api.nvim_win_set_cursor, api.nvim_buf_set_text, api.nvim_buf_get_text
 
-local util = require("vietnamese.util")
+local Codec = require("vietnamese.util.codec")
+local Util = require("vietnamese.util")
 
-local is_vietnamese_char, reverse_list, iter_chars, iter_chars_reverse =
-	util.is_vietnamese_char, util.reverse_list, util.iter_chars, util.iter_chars_reverse
+local is_vn_char = Codec.is_vn_char
+
+local reverse_list, iter_chars, iter_chars_reverse = Util.reverse_list, Util.iter_chars, Util.iter_chars_reverse
 
 local THRESHOLD_WORD_LEN = 8
 --- assuming that each char is two bytes
@@ -16,19 +18,14 @@ local WORST_CASE_WORD_LEN = THRESHOLD_WORD_LEN * 2 + 2
 local M = {}
 
 --- Check if a character is a valid input character for the current method
-local function is_diacritic_pressed(char, method_config)
+local is_diacritic_pressed = function(char, method_config)
 	if type(method_config.is_diacritic_pressed) == "function" then
 		return method_config.is_diacritic_pressed(char)
 	end
-	local method_util = require("vietnamese.util.method-config")
-	if
-		method_util.is_tone_key(char, method_config)
-		or method_util.is_tone_removal_key(char, method_config)
-		or method_util.is_shape_key(char, method_config)
-	then
-		return true
-	end
-	return false
+	local McUtil = require("vietnamese.util.method-config")
+	return McUtil.is_tone_key(char, method_config)
+		or McUtil.is_tone_removal_key(char, method_config)
+		or McUtil.is_shape_key(char, method_config)
 end
 
 --- Get valid Vietnamese characters to the **left** of the cursor.
@@ -58,7 +55,7 @@ local function collect_left_chars(bufnr, row_0based, col_0based)
 	local count = 0 -- Length of the left_chars_reversed table
 
 	for _, ch in iter_chars_reverse(text_chunk) do
-		if is_vietnamese_char(ch) then
+		if is_vn_char(ch) then
 			count = count + 1
 			collected_chars[count] = ch
 		else
@@ -92,7 +89,7 @@ local function collect_right_chars_from_cursor(bufnr, row_0based, col_0based)
 	local collected_chars = {}
 	local count = 0
 	for _, ch in iter_chars(text_chunk) do
-		if is_vietnamese_char(ch) then
+		if is_vn_char(ch) then
 			count = count + 1
 			collected_chars[count] = ch
 		else
@@ -136,13 +133,19 @@ local function find_vnword_under_cursor(bufnr, row_0based, col_0based)
 end
 M.find_vnword_under_cursor = find_vnword_under_cursor
 
+local function do_without_events(events, fn)
+	local old = o.eventignore
+	o.eventignore = events
+	fn()
+	o.eventignore = old
+end
+
 M.setup = function()
 	local NAMESPACE = api.nvim_create_namespace("VietnameseEngine")
 	local AUGROUP = require("vietnamese.constant").AUGROUP
 
 	--- module
 	local config = require("vietnamese.config")
-	local bim_ok, bim_handler = pcall(require, "bim.handler")
 
 	--- state
 	local inserted_char = ""
@@ -219,7 +222,7 @@ M.setup = function()
 				if v.char == inserted_char then
 					inserting = true
 					working_bufnr = bufnr
-					is_vowel_pressed = util.is_level1_vowel(inserted_char)
+					is_vowel_pressed = Util.is_level1_vowel(inserted_char)
 					is_diacritic_key_pressed = is_diacritic_pressed(inserted_char, config.get_method_config())
 
 					if is_diacritic_key_pressed or is_vowel_pressed then
@@ -292,14 +295,12 @@ M.setup = function()
 				nvim_buf_set_text(0, row_0based, wstart, row_0based, wend, { new_word })
 
 				local new_cursor_col = word_engine:get_curr_cursor_col(col_0based)
+
 				if col_0based ~= new_cursor_col then
 					-- Restore cursor position
-					nvim_win_set_cursor(0, { row, new_cursor_col })
-
-					-- intergrate with bim plugin
-					if bim_ok then
-						bim_handler.trigger_cursor_move_accepted()
-					end
+					do_without_events("CursorMoved,CursorMovedI", function()
+						nvim_win_set_cursor(0, { row, new_cursor_col })
+					end)
 				end
 
 				reset_state()

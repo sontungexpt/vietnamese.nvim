@@ -1,34 +1,34 @@
-local Diacritic = require("vietnamese.constant").Diacritic
+local DIACRITIC = require("vietnamese.util.codec").DIACRITIC
 
 local M = {
 	tone_keys = {
-		["1"] = Diacritic.Acute,
-		["2"] = Diacritic.Grave,
-		["3"] = Diacritic.Hook,
-		["4"] = Diacritic.Tilde,
-		["5"] = Diacritic.Dot,
+		["1"] = DIACRITIC.Acute,
+		["2"] = DIACRITIC.Grave,
+		["3"] = DIACRITIC.Hook,
+		["4"] = DIACRITIC.Tilde,
+		["5"] = DIACRITIC.Dot,
 	},
 	tone_removal_keys = {
 		["0"] = true,
 	},
 	shape_keys = {
 		["6"] = {
-			["a"] = Diacritic.Circumflex,
-			["e"] = Diacritic.Circumflex,
-			["o"] = Diacritic.Circumflex,
+			["a"] = DIACRITIC.Circumflex,
+			["e"] = DIACRITIC.Circumflex,
+			["o"] = DIACRITIC.Circumflex,
 		},
 
 		["7"] = {
-			["u"] = Diacritic.Horn,
-			["o"] = Diacritic.Horn,
+			["u"] = DIACRITIC.Horn,
+			["o"] = DIACRITIC.Horn,
 		},
 
 		["8"] = {
-			["a"] = Diacritic.Breve,
+			["a"] = DIACRITIC.Breve,
 		},
 
 		["9"] = {
-			["d"] = Diacritic.HorizontalStroke,
+			["d"] = DIACRITIC.Stroke,
 		},
 	},
 	char_map = {},

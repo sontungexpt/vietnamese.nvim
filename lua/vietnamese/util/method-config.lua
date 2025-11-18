@@ -1,15 +1,20 @@
-local util = require("vietnamese.util")
-local level = util.level
-
-local CONSTANT = require("vietnamese.constant")
-local Diacritic, DIACRITIC_MAP = CONSTANT.Diacritic, CONSTANT.DIACRITIC_MAP
+local Codec = require("vietnamese.util.codec")
+local DIACRITIC = Codec.DIACRITIC
 
 local M = {}
 
+--- This function checks if the key is in the list of tone keys defined in the method configuration.
+--- @param key string The key pressed by the user.
+--- @param method_config MethodConfig The method configuration containing tone keys.
+--- @return boolean is_tone_key True if the key is a tone key, false otherwise.
 function M.is_tone_key(key, method_config)
 	return method_config.tone_keys[key:lower()] ~= nil
 end
 
+--- This function checks if the key is in the list of shape keys defined in the method configuration.
+--- @param key string The key pressed by the user.
+--- @param method_config MethodConfig The method configuration containing shape keys.
+--- @return boolean is_shape True if the key is a shape key, false otherwise.
 function M.is_shape_key(key, method_config)
 	return method_config.shape_keys[key:lower()] ~= nil
 end
@@ -17,8 +22,8 @@ end
 --- Check if a key is a tone removal key.
 --- This function checks if the key is in the list of tone removal keys defined in the method configuration.
 --- @param key string The key pressed by the user.
---- @param method_config table The method configuration containing tone removal keys.
---- @return boolean True if the key is a tone removal key, false otherwise.
+--- @param method_config MethodConfig The method configuration containing tone removal keys.
+--- @return boolean is_tone_removal_key True if the key is a tone removal key, false otherwise.
 local function is_tone_removal_key(key, method_config)
 	return method_config.tone_removal_keys[key:lower()]
 end
@@ -28,22 +33,14 @@ M.is_tone_removal_key = is_tone_removal_key
 --- If the key corresponds to a tone diacritic for the base character,
 --- @param key string The key pressed by the user.
 --- @param affected_char string The base character to which the diacritic is applied.
---- @param method_config table The method configuration containing tone keys.
---- @param strict boolean|nil If true, uses the base character as is; if false, uses the level 2 form of the base character.
+--- @param method_config MethodConfig The method configuration containing tone keys.
 --- @return Diacritic|nil tone The tone ENUM_DIACRITIC
-local function get_tone_diacritic(key, affected_char, method_config, strict)
+local function key_to_tone(key, affected_char, method_config)
 	local tone = method_config.tone_keys[key:lower()]
-	if not tone then
-		return nil
-	end
-
-	local tone_map = DIACRITIC_MAP[strict and affected_char or level(affected_char, 2)]
-	if tone_map and tone_map[tone] then
-		return tone
-	end
-	return nil
+	--- All vowels can come with a tone
+	return tone and Codec.is_vn_vowel(affected_char) and tone or nil
 end
-M.get_tone_diacritic = get_tone_diacritic
+M.key_to_tone = key_to_tone
 
 function M.has_multi_shape_effects(key, method_config)
 	local shape_map = method_config.shape_keys[key:lower()]
@@ -58,48 +55,37 @@ end
 --- This function checks if the key corresponds to a shape diacritic for the base character.
 --- @param key string The key pressed by the user.
 --- @param affected_char string The base character to which the diacritic is applied.
---- @param method_config table The method configuration containing shape keys.
---- @param strict boolean|nil If true, uses the base character as is; if false, uses the level 1 form of the base character.
+--- @param method_config MethodConfig The method configuration containing shape keys.
 --- @return Diacritic|nil shape The shape ENUM_DIACRITIC
-local function get_shape_diacritic(key, affected_char, method_config, strict)
+local function key_to_shape(key, affected_char, method_config)
 	--- check existence of shape_keys in method_config
 	local shape_map = method_config.shape_keys[key:lower()]
-	if not shape_map then
-		return nil
-	end
-
-	affected_char = strict and affected_char or level(affected_char, 1)
-	local diacritic_map = DIACRITIC_MAP[affected_char]
-	if not diacritic_map then
-		return nil
-	end
-
-	local shape = shape_map[affected_char:lower()]
-	return shape and diacritic_map[shape] and shape or nil
+	--- Get the shape diacritic defined for the base character
+	local shape = shape_map and shape_map[Codec.base(affected_char)] or nil
+	--- If the key corresponds to a shape diacritic for the base character
+	return (shape and Codec.diacritic_mergeable(affected_char, shape)) and shape or nil
 end
-M.get_shape_diacritic = get_shape_diacritic
+M.key_to_shape = key_to_shape
 
 --- Get the diacritic for a given key and base character.
 --- This function checks if the key corresponds to a tone or shape diacritic for the base character.
 --- @param key string The key pressed by the user.
 --- @param affected_char string The base character to which the diacritic is applied.
---- @param method_config table The method configuration containing tone and shape keys.
---- @param strict boolean|nil If true, uses the base character as is; if false, uses the level 1 form of the base character.
+--- @param method_config MethodConfig The method configuration containing tone and shape keys.
 --- @return Diacritic|nil diacritic The diacritic ENUM_DIACRITIC
-function M.get_diacritic(key, affected_char, method_config, strict)
-	local diacritic = get_tone_diacritic(key, affected_char, method_config, strict)
-		or get_shape_diacritic(key, affected_char, method_config, strict)
+function M.key_to_diacritic(key, affected_char, method_config)
+	local diacritic = key_to_tone(key, affected_char, method_config) or key_to_shape(key, affected_char, method_config)
 
 	if diacritic then
 		return diacritic
-	elseif is_tone_removal_key(key, method_config) and util.has_tone_marked(affected_char) then
-		return Diacritic.Flat
+	elseif is_tone_removal_key(key, method_config) and Codec.has_tone(affected_char) then
+		return DIACRITIC.Flat
 	end
 	return nil
 end
 
 function M.is_diacritic_applicable(diacritic_key, applied_char, method_config)
-	return M.get_diacritic(diacritic_key, applied_char, method_config) ~= nil
+	return M.key_to_diacritic(diacritic_key, applied_char, method_config) ~= nil
 end
 
 function M.validate_config(method_config)
@@ -137,12 +123,12 @@ function M.validate_config(method_config)
 
 	-- if u or o is map with horn, then both u o is map for that key
 	for key, shape_map in pairs(method_config.shape_keys) do
-		if shape_map["u"] == Diacritic.Horn and shape_map["o"] ~= Diacritic.Horn then
+		if shape_map["u"] == DIACRITIC.Horn and shape_map["o"] ~= DIACRITIC.Horn then
 			notifier.error(
 				"Both 'u' and 'o' must be mapped to the same Horn for key '" .. key .. "' in the method configuration."
 			)
 			return false
-		elseif shape_map["o"] == Diacritic.Horn and shape_map["u"] ~= Diacritic.Horn then
+		elseif shape_map["o"] == DIACRITIC.Horn and shape_map["u"] ~= DIACRITIC.Horn then
 			notifier.error(
 				"Both 'u' and 'o' must be mapped to the same Horn for key '" .. key .. "' in the method configuration."
 			)
