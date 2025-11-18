@@ -1,6 +1,8 @@
 local M = {}
 
 M = {
+	--- @type table<string, number>
+	--- VOWEL_ACCENT_PRIORITY maps Vietnamese vowels with accents to their priority.
 	VOWEL_PRIORITY = {
 		["ơ"] = 0,
 		["ê"] = 1,
