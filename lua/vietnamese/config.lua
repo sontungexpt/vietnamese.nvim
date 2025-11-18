@@ -50,6 +50,8 @@ M.set_orthography_stragegy = function(strategy)
 	default_config.orthography = strategy
 end
 
+--- Check if Vietnamese input is enabled
+--- @return boolean enabled True if Vietnamese input is enabled, false otherwise
 M.is_enabled = function()
 	return default_config.enabled
 end
@@ -86,6 +88,8 @@ M.set_enabled = function(enabled)
 	return enabled
 end
 
+--- Toggle Vietnamese input
+--- @return boolean enabled True if Vietnamese input is enabled, false otherwise
 M.toggle_enabled = function()
 	return M.set_enabled(not default_config.enabled)
 end
@@ -133,6 +137,7 @@ local function merge_user_config(defaults, overrides)
 	return defaults
 end
 
+--- Merge user config into the default config
 M.set_user_config = function(user_config)
 	merge_user_config(default_config, user_config)
 end
@@ -142,29 +147,24 @@ M.get_config = function()
 end
 
 function M.get_method_config()
-	if not active_method_config then
-		local active_method = default_config.input_method
-		if vim.list_contains(SUPPORTED_METHODS, active_method) then
-			active_method_config = require(METHOD_CONFIG_PATH .. active_method)
-		else
-			local custom_config = default_config.custom_methods[active_method]
-			active_method_config = require("vietnamese.util.method-config").validate_config(custom_config)
-					and custom_config
-				or require(METHOD_CONFIG_PATH .. SUPPORTED_METHODS[1]) -- Fallback to first supported method
-		end
+	if active_method_config then
+		return active_method_config
+	end
+
+	local active_method = default_config.input_method
+	if vim.list_contains(SUPPORTED_METHODS, active_method) then
+		active_method_config = require(METHOD_CONFIG_PATH .. active_method)
+	else
+		local custom_config = default_config.custom_methods[active_method]
+		active_method_config = require("vietnamese.util.method-config").validate_config(custom_config) and custom_config
+			or require(METHOD_CONFIG_PATH .. SUPPORTED_METHODS[1]) -- Fallback to first supported method
 	end
 
 	return active_method_config
 end
 
-function M.is_excluded_filetype(filetype)
-	return type(filetype) == "string" and vim.list_contains(default_config.excluded.filetypes, filetype)
-end
-
-function M.is_excluded_buftype(buftype)
-	return type(buftype) == "string" and vim.list_contains(default_config.excluded.buftypes, buftype)
-end
-
+--- Get a list of all supported input methods
+--- @return string[]
 function M.get_support_methods()
 	return vim.list_extend(vim.deepcopy(SUPPORTED_METHODS), vim.tbl_keys(default_config.custom_methods))
 end

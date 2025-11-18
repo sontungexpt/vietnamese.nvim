@@ -783,4 +783,11 @@ M.is_vn_char = function(c)
 	return VN_CODEC[c] ~= nil
 end
 
+--- Check if a character is "d" or "đ" or "D" or "Đ"
+--- @param c string The character to check
+--- @return boolean is_dD True if the character is "d" or "đ" or "D" or "Đ", false otherwise
+M.is_dD = function(c)
+	return c == "d" or c == "đ" or c == "D" or c == "Đ"
+end
+
 return M

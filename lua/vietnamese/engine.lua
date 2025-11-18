@@ -1,15 +1,29 @@
 local vim, type = vim, type
 local api, v, o = vim.api, vim.v, vim.o
-local nvim_win_get_cursor, nvim_win_set_cursor, nvim_buf_set_text, nvim_buf_get_text =
-	api.nvim_win_get_cursor, api.nvim_win_set_cursor, api.nvim_buf_set_text, api.nvim_buf_get_text
+local tbl_move = table.move
 
+local nvim_win_set_cursor = api.nvim_win_set_cursor
+local nvim_win_get_cursor = api.nvim_win_get_cursor
+local nvim_buf_get_text = api.nvim_buf_get_text
+local nvim_buf_set_text = api.nvim_buf_set_text
+local nvim_create_autocmd = api.nvim_create_autocmd
+
+--- module
 local Codec = require("vietnamese.util.codec")
 local Util = require("vietnamese.util")
+local Config = require("vietnamese.config")
+local WordEngine = require("vietnamese.WordEngine")
 
 local is_vn_char = Codec.is_vn_char
 
-local reverse_list, iter_chars, iter_chars_reverse = Util.reverse_list, Util.iter_chars, Util.iter_chars_reverse
+local reverse_list = Util.reverse_list
+local iter_chars = Util.iter_chars
+local iter_chars_reverse = Util.iter_chars_reverse
 
+local get_method_config = Config.get_method_config
+local get_orthography_stragegy = Config.get_orthography_stragegy
+
+local NAMESPACE = api.nvim_create_namespace("Vietnamese")
 local THRESHOLD_WORD_LEN = 8
 --- assuming that each char is two bytes
 --- plus 2 for one char with the tone (3byte for tone char)
@@ -32,18 +46,18 @@ end
 --- It fetches chunks of text from the left side, expanding by THRESHOLD_WORD_LEN each time.
 --- It collects characters that are valid Vietnamese letters and stops when a non-Vietnamese char is found.
 --- @param bufnr integer: Buffer number
---- @param row_0based integer: Cursor row (0-based)
---- @param col_0based integer: Cursor column (0-based)
+--- @param row0 integer: Cursor row (0-based)
+--- @param col0 integer: Cursor column (0-based)
 --- @return string[] chars List of left characters (from closest to furthest from cursor)
 --- @return integer size Length of left_chars collected
-local function collect_left_chars(bufnr, row_0based, col_0based)
+local function scan_left_word_segment(bufnr, row0, col0)
 	-- Get the text from start_col to end_col
 	local text_chunk = nvim_buf_get_text(
 		bufnr,
-		row_0based,
-		col_0based - WORST_CASE_WORD_LEN > 0 and col_0based - WORST_CASE_WORD_LEN or 0,
-		row_0based,
-		col_0based,
+		row0,
+		col0 - WORST_CASE_WORD_LEN > 0 and col0 - WORST_CASE_WORD_LEN or 0,
+		row0,
+		col0,
 		{}
 	)[1]
 	if not text_chunk or text_chunk == "" then
@@ -71,13 +85,12 @@ end
 --- It fetches chunks of text from the right side, expanding by THRESHOLD_WORD_LEN each time.
 --- It collects characters that are valid Vietnamese letters and stops when a non-Vietnamese char is found.
 --- @param bufnr integer: Buffer number
---- @param row_0based integer: Cursor row (0-based)
---- @param col_0based integer: Cursor column (0-based)
+--- @param row0 integer: Cursor row (0-based)
+--- @param col0 integer: Cursor column (0-based)
 --- @return string[] chars List of right characters (from closest to furthest from cursor)
 --- @return integer size Length of right_chars collected
-local function collect_right_chars_from_cursor(bufnr, row_0based, col_0based)
-	local text_chunk =
-		nvim_buf_get_text(bufnr, row_0based, col_0based, row_0based, col_0based + WORST_CASE_WORD_LEN, {})[1]
+local function scan_right_word_segment(bufnr, row0, col0)
+	local text_chunk = nvim_buf_get_text(bufnr, row0, col0, row0, col0 + WORST_CASE_WORD_LEN, {})[1]
 	if not text_chunk or text_chunk == "" then
 		return {}, 0
 	end
@@ -102,34 +115,27 @@ end
 --- Combines characters from left of the cursor, the cursor character itself, and characters to the right.
 --- Checks thresholds and rules to avoid collecting too many characters or empty segments.
 --- @param bufnr integer Buffer number
---- @param row_0based integer Row of the cursor (0-based)
---- @param col_0based integer Column of the cursor (0-based)
+--- @param row0 integer Row of the cursor (0-based)
+--- @param col0 integer Column of the cursor (0-based)
 --- @return string[]|nil chars List of characters in the word
 --- @return integer size Length of the word
 --- @return integer start_idx Index of the inserted character
-local function find_vnword_under_cursor(bufnr, row_0based, col_0based)
+local function extract_vn_word(bufnr, row0, col0)
 	-- Get both sides of the word
-	local left_chars, left_len = collect_left_chars(bufnr, row_0based, col_0based)
+	local left_chars, left_len = scan_left_word_segment(bufnr, row0, col0)
 	if left_len == THRESHOLD_WORD_LEN or left_len < 1 then
 		return nil, 0, 0
 	end
 
-	local right_chars, right_len = collect_right_chars_from_cursor(bufnr, row_0based, col_0based)
+	local right_chars, right_len = scan_right_word_segment(bufnr, row0, col0)
 
 	local char_count = left_len + right_len
 	if char_count >= THRESHOLD_WORD_LEN then
 		return nil, 0, 0
 	end
-
-	--- combine right to left to get full word
-	local chars = left_chars
-	for i = 1, right_len do
-		chars[left_len + i] = right_chars[i]
-	end
-
+	local chars = tbl_move(right_chars, 1, right_len, left_len + 1, left_chars)
 	return chars, char_count, left_len + 1
 end
-M.find_vnword_under_cursor = find_vnword_under_cursor
 
 --- Calls a function without triggering events
 --- @param events string The events to ignore
@@ -142,35 +148,25 @@ local do_without_events = function(events, fn)
 end
 
 M.setup = function()
-	local NAMESPACE = api.nvim_create_namespace("VietnameseEngine")
-	local AUGROUP = require("vietnamese.constant").AUGROUP
-
-	--- module
-	local config = require("vietnamese.config")
-
 	--- state
+	local active_bufnr = -1
+
 	local inserted_char = ""
-	local working_bufnr = -1
+	local inserted_idx = 0
+	local current_word = nil
+	local current_word_len = 0
 
-	local cword, cwlen, inserted_idx = nil, 0, 0
-
-	local inserting = false
-	local delete_pressed = false
-
-	local is_vowel_pressed = false
+	local is_inserting = false
+	local is_delete_pressed = false
+	local is_aeiouy_pressed = false
 	local is_diacritic_key_pressed = false
 
 	local reset_state = function()
-		cword, cwlen, inserted_idx = nil, 0, 0
-		is_vowel_pressed, is_diacritic_key_pressed = false, false
-	end
-
-	local function register_onkey(cb, opts)
-		vim.on_key(cb, NAMESPACE, opts)
-	end
-
-	local unregister_onkey = function()
-		vim.on_key(nil, NAMESPACE)
+		current_word = nil
+		current_word_len = 0
+		inserted_idx = 0
+		is_aeiouy_pressed = false
+		is_diacritic_key_pressed = false
 	end
 
 	local function is_backspace(key)
@@ -189,40 +185,34 @@ M.setup = function()
 	--- and it will break the InsertCharPre autocmd
 	--- Not only that it will have more strange behavior with buffer because the onkey may execute
 	--- before buffer is ready
-	api.nvim_create_autocmd({ "InsertEnter", "InsertLeave" }, {
-		group = AUGROUP,
+	nvim_create_autocmd({ "InsertEnter", "InsertLeave" }, {
 		callback = function(args)
-			if config.is_enabled() and config.is_buf_enabled(args.buf) and args.event == "InsertEnter" then
-				---@diagnostic disable-next-line: unused-local
-				register_onkey(function(key, typed)
-					delete_pressed = is_backspace(typed) or is_delete(typed)
+			if Config.is_enabled() and Config.is_buf_enabled(args.buf) and args.event == "InsertEnter" then
+				vim.on_key(function(key, typed)
+					is_delete_pressed = is_backspace(typed) or is_delete(typed)
 					inserted_char = typed
-				end)
+				end, NAMESPACE)
 			else
-				unregister_onkey()
+				vim.on_key(nil, NAMESPACE)
 			end
 		end,
 	})
 
-	api.nvim_create_autocmd({
-		"InsertCharPre",
-		"TextChangedI",
-	}, {
-		group = AUGROUP,
+	nvim_create_autocmd({ "InsertCharPre", "TextChangedI" }, {
 		callback = function(args)
 			local bufnr = args.buf
-			if not config.is_enabled() or not config.is_buf_enabled(bufnr) then
+			if not Config.is_enabled() or not Config.is_buf_enabled(bufnr) then
 				return
 			elseif args.event == "InsertCharPre" then
 				if v.char == inserted_char then
-					inserting = true
-					working_bufnr = bufnr
-					is_vowel_pressed = Util.is_level1_vowel(inserted_char)
-					is_diacritic_key_pressed = is_diacritic_pressed(inserted_char, config.get_method_config())
+					is_inserting = true
+					active_bufnr = bufnr
+					is_aeiouy_pressed = inserted_char:match("^[aeiouyAEIOUY]$") ~= nil
+					is_diacritic_key_pressed = is_diacritic_pressed(inserted_char, get_method_config())
 
-					if is_diacritic_key_pressed or is_vowel_pressed then
+					if is_diacritic_key_pressed or is_aeiouy_pressed then
 						local pos = nvim_win_get_cursor(0)
-						cword, cwlen, inserted_idx = find_vnword_under_cursor(bufnr, pos[1] - 1, pos[2])
+						current_word, current_word_len, inserted_idx = extract_vn_word(bufnr, pos[1] - 1, pos[2])
 						return
 					end
 				end
@@ -230,36 +220,36 @@ M.setup = function()
 				-- make sure that we are inserted
 				-- and does not have any plugins change the inserted behavior
 				return
-			elseif working_bufnr ~= bufnr then
+			elseif active_bufnr ~= bufnr then
 				-- make sure InsertedCharPre and TextChangedI in same buffer
 				reset_state()
 				return
-			elseif not inserting then
+			elseif not is_inserting then
 				-- why not merge with above condiction
 				-- To ensures that if not inserting it will jump to this block
 				-- If merge maybe it will jump to the inserting block incorrectly
-				if delete_pressed then
+				if is_delete_pressed then
 					-- check again to make sure it is delete key
 					-- not implemented yet
 					return
 				end
 				return
 			else
-				inserting = false
+				is_inserting = false
 
 				-- nothing to handle
-				if not cword then
+				if not current_word then
 					return
 				end
 
-				local method_config = config.get_method_config()
+				local method_config = get_method_config()
 				if not method_config then
 					reset_state()
 					return
 				end
 
 				local changed = false
-				local word_engine = require("vietnamese.WordEngine"):new(cword, cwlen, inserted_char, inserted_idx)
+				local word_engine = WordEngine:new(current_word, current_word_len, inserted_char, inserted_idx)
 
 				-- check the diacritic key first
 				if
@@ -267,11 +257,11 @@ M.setup = function()
 					and word_engine:is_potential_diacritic_key(method_config)
 					and word_engine:is_potential_vnword()
 				then
-					changed = word_engine:processes_diacritic(method_config, config.get_orthography_stragegy())
+					changed = word_engine:processes_diacritic(method_config, get_orthography_stragegy())
 				end
 				-- if not changed, then check the vowel
-				if not changed and is_vowel_pressed then
-					changed = word_engine:processes_new_vowel(method_config, config.get_orthography_stragegy())
+				if not changed and is_aeiouy_pressed then
+					changed = word_engine:processes_new_vowel(method_config, get_orthography_stragegy())
 				end
 				-- if still not changed, then end
 				if not changed then
@@ -281,19 +271,19 @@ M.setup = function()
 
 				local pos = nvim_win_get_cursor(0)
 				local row = pos[1] -- Row is 1-indexed in API
-				local row_0based, col_0based = row - 1, pos[2]
+				local row0, col0 = row - 1, pos[2]
 
 				local new_word = word_engine:tostring()
 
-				local wstart, wend = word_engine:col_bounds(col_0based)
+				local wstart, wend = word_engine:col_bounds(col0)
 
 				do_without_events("TextChanged,TextChangedI", function()
-					nvim_buf_set_text(0, row_0based, wstart, row_0based, wend, { new_word })
+					nvim_buf_set_text(0, row0, wstart, row0, wend, { new_word })
 				end)
 
-				local new_cursor_col = word_engine:get_curr_cursor_col(col_0based)
+				local new_cursor_col = word_engine:get_curr_cursor_col(col0)
 
-				if col_0based ~= new_cursor_col then
+				if col0 ~= new_cursor_col then
 					-- Restore cursor position
 					do_without_events("CursorMoved,CursorMovedI", function()
 						nvim_win_set_cursor(0, { row, new_cursor_col })

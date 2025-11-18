@@ -124,7 +124,6 @@ M.setup = function()
 		"FocusLost",
 		"VimLeave",
 	}, {
-		group = require("vietnamese.constant").AUGROUP,
 		callback = function(args)
 			if not config.is_enabled() then
 				return

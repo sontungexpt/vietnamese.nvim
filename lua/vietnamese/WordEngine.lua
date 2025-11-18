@@ -521,7 +521,7 @@ function WordEngine:analyze_structure(force)
 	end
 
 	if vs < 1 then
-		if char_count == 1 and Util.is_d(chars[1]) then
+		if char_count == 1 and Codec.is_dD(chars[1]) then
 			-- Special d
 			self.word_state = WordShapeReady
 		else
@@ -635,7 +635,7 @@ local function collect_effects(chars, vs, ve, inkey, inidx, method_config)
 	local effects = {}
 
 	local c1 = chars[1]
-	local stroke = Util.is_d(c1) and key_to_shape(inkey, c1, method_config)
+	local stroke = Codec.is_dD(c1) and key_to_shape(inkey, c1, method_config)
 	if stroke then
 		local striped, curr_shape = Codec.strip_shape2(c1)
 		effects[1] = {

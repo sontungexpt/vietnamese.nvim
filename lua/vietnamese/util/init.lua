@@ -9,7 +9,7 @@ local M = {}
 --- Reverse a table in place
 --- @param tbl table: Table to reverse
 --- @param len integer: Optional length of the table to reverse (default is #tbl)
---- @return table: Reversed table
+--- @return table reversed Reversed table
 M.reverse_list = function(tbl, len)
 	len = len or #tbl
 	if len < 2 then
@@ -20,31 +20,6 @@ M.reverse_list = function(tbl, len)
 	end
 	return tbl
 end
-
-local function concat_tight_range(list, i, j, list_size)
-	i = i or 1
-	j = j or list_size or #list
-
-	local len = j - i + 1
-	if len < 1 then
-		error("Invalid range: " .. i .. " to " .. j)
-	elseif len == 1 then
-		return list[i]
-	elseif len == 2 then
-		return list[i] .. list[j]
-	elseif len == 3 then
-		return list[i] .. list[i + 1] .. list[j]
-	elseif len < 31 then
-		return table.concat(list, "", i, j)
-	end
-
-	local buf = {}
-	for k = i, j do
-		buf[#buf + 1] = list[k]
-	end
-	return table.concat(buf)
-end
-M.concat_tight_range = concat_tight_range
 
 --- Convert a string to a table of characters
 --- @param str string: The string to Convert
@@ -121,7 +96,7 @@ M.lower = function(word)
 	for i, c in iter do
 		chars[i] = lower_char(c)
 	end
-	return concat_tight_range(chars)
+	return table.concat(chars)
 end
 
 --- Convert a string to uppercase
@@ -140,51 +115,28 @@ function M.upper(word)
 	for i, char in iter do
 		chars[i] = upper_char(char)
 	end
-	return concat_tight_range(chars)
-end
-
---- Check if a character is a level 1 Vietnamese vowel
---- @param c string The character to checks
---- @return boolean True if the character is a level 1 Vietnamese vowel, false otherwise
-function M.is_level1_vowel(c)
-	return c:match("^[aeiouyAEIOUY]$") ~= nil
+	return table.concat(chars)
 end
 
 --- Get the byte offset of a column in a row of buffers
 --- @param bufnr number: Buffer number
---- @param row0based integer: Line number (0-based)
---- @param col0based integer  Column number (0-based)
+--- @param row0 integer: Line number (0-based)
+--- @param col0 integer  Column number (0-based)
 --- @return integer : Byte offset of the column in the line
-function M.col_to_byteoffset(bufnr, row0based, col0based)
-	-- api nvim_win_Get_cursor also return byteoffset
+function M.col_to_byteoffset(bufnr, row0, col0)
+	--- api nvim_win_Get_cursor also return byteoffset
 	--- byteoffset is start from 0
-	local byteoffset = #(nvim_buf_get_text(bufnr, row0based, 0, row0based, col0based, {})[1] or "")
-	return byteoffset
+	return #(nvim_buf_get_text(bufnr, row0, 0, row0, col0, {})[1] or "")
 end
 
 --- Convert a column index to a cell index in a buffer
 --- @param bufnr number: Buffer number
---- @param row0based integer: Row number (0-based)
---- @param col0based integer: Column number (0-based)
+--- @param row0 integer: Row number (0-based)
+--- @param col0 integer: Column number (0-based)
 --- @return integer: Cell index of the column in the line
-function M.col_to_cell_idx(bufnr, row0based, col0based)
+function M.col_to_cell_idx(bufnr, row0, col0)
 	--- byteoffset is start from 0
-	local cell_idx = vim.fn.strdisplaywidth((nvim_buf_get_text(bufnr, row0based, 0, row0based, col0based, {})[1] or ""))
-	return cell_idx
-end
-
---- Check if a character is "d" or "đ" or "D" or "Đ"
---- @param char string: The character to check
---- @return boolean: True if the character is "d" or "đ" or "D" or "Đ", false otherwise
-function M.is_d(char)
-	return char == "d" or char == "đ" or char == "D" or char == "Đ"
-end
-
-function M.is_lower_uo(u, o)
-	if u == "u" or u == "ư" then
-		return o == "o" or o == "ơ" or o == "ô"
-	end
-	return false
+	return vim.fn.strdisplaywidth((nvim_buf_get_text(bufnr, row0, 0, row0, col0, {})[1] or ""))
 end
 
 --- Sort a list using insertion sorts
