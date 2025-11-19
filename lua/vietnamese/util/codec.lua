@@ -641,9 +641,9 @@ M.upper_char = function(c)
 	error("Invalid character length: " .. len .. " for character: " .. c)
 end
 
---- Get the base of a Vietnamese character
+--- Get the base of a Vietnamese character in lowercase
 --- @param c string The character to check
---- @return string base The base of the character
+--- @return string base The base of the character (always lowercase)
 local base = function(c)
 	local code = VN_CODEC[c]
 	---@cast code integer
@@ -652,34 +652,20 @@ local base = function(c)
 end
 M.base = base
 
---- Get the lowercase base of a Vietnamese character
+--- Get the base of a Vietnamese character with the case is preserved
 --- @param c string The character to check
---- @return string lower_base The lowercase base of the character
-M.base_lower = function(c)
+--- @return string base The base of the character (with the case preserved)
+M.base_with_case = function(c)
 	local code = VN_CODEC[c]
 	--- @cast code integer
 	--- @diagnostic disable-next-line: return-type-mismatch
-	return code and VN_CODEC[band(band(code, BASE_MASK), CASE_CLEAR)] or c:lower()
-end
-
---- Get the shape of a Vietnamese character
---- @param c string The character to check
---- @return Diacritic shape The shape of the character
-M.shape = function(c)
-	local code = VN_CODEC[c]
-	--- @cast code integer
-	return code and band(code, SHAPE_MASK) or DIACRITIC.Flat
+	return code and VN_CODEC[band(code, bor(BASE_MASK, CASE_MASK))] or c:lower()
 end
 
 --- Check if a character has a tone
 --- @param c string The character to check
 --- @return boolean had True if the character has a tone, false otherwise
 M.has_tone = function(c)
-	local len = #c
-	-- an ascii character or a 4-byte character
-	if len < 2 or len > 3 then
-		return false
-	end
 	local code = VN_CODEC[c]
 	--- @cast code integer
 	return code and band(code, TONE_MASK) ~= 0 or false
@@ -717,6 +703,24 @@ M.strip_tone2 = function(c)
 	--- @cast tone Diacritic
 	---@diagnostic disable-next-line: return-type-mismatch
 	return (tone == 0 and c or VN_CODEC[band(code, TONE_CLEAR)]), tone
+end
+
+--- Check if a character has a shape
+--- @param c string The character to check
+--- @return boolean had True if the character has a shape, false otherwise
+M.has_shape = function(c)
+	local code = VN_CODEC[c]
+	--- @cast code integer
+	return code and band(code, SHAPE_MASK) ~= 0 or false
+end
+
+--- Get the shape of a Vietnamese character
+--- @param c string The character to check
+--- @return Diacritic shape The shape of the character
+M.shape = function(c)
+	local code = VN_CODEC[c]
+	--- @cast code integer
+	return code and band(code, SHAPE_MASK) or DIACRITIC.Flat
 end
 
 --- Strip the shape of a Vietnamese character
@@ -787,40 +791,40 @@ M.unpack_char = function(c)
 		return c, DIACRITIC.Flat, DIACRITIC.Flat
 	end
 	--- @cast code integer
-	---@diagnostic disable-next-line: return-type-mismatch
+	--- @diagnostic disable-next-line: return-type-mismatch
 	return VN_CODEC[band(code, BASE_MASK)], band(code, SHAPE_MASK), band(code, TONE_MASK)
 end
 
 --- Check if a character is "d" or "đ" or "D" or "Đ"
 --- @param c string The character to check
 --- @return boolean is_dD True if the character is "d" or "đ" or "D" or "Đ", false otherwise
-local is_dD = function(c)
+M.is_dD = function(c)
 	return c == "d" or c == "đ" or c == "D" or c == "Đ"
 end
-M.is_dD = is_dD
 
 --- Check if a character is a Vietnamese vowel
 --- @param c string The character to check
 --- @return boolean is_vowel True if the character is a Vietnamese vowel, false otherwise
 M.is_vn_vowel = function(c)
-	return VN_CODEC[c] ~= nil and not is_dD(c)
+	if not VN_CODEC[c] then
+		return false
+	end
+	local b = byte(c)
+	-- 0xC4 is first byte of đ or Đ no need to check second byte
+	-- 100 is first byte of d
+	-- 68 is first byte of D
+	return b ~= 0xC4 and b ~= 100 and b ~= 68
 end
 
 --- Check if a character is a Vietnamese character
 --- @param c string The character to check
 --- @return boolean is_vietnamese_char True if the character is a Vietnamese character, false otherwise
 M.is_vn_char = function(c)
-	local len = #c
-	if len == 1 then
-		-- ascii check
-		local b = byte(c)
-		return (b > 96 and b < 123) -- a-z
-			or (b > 64 and b < 91) -- A-Z
-	elseif len < 1 or len > 3 then
-		return false
-	end
-	-- check for all 2-byte and 3-byte Vietnamese characters
-	return VN_CODEC[c] ~= nil
+	local b1, b2 = byte(c, 1, 2)
+	return b2 == nil and (
+			(b1 > 96 and b1 < 123) -- a-z
+			or (b1 > 64 and b1 < 91) -- A-Z
+		) or VN_CODEC[c] ~= nil -- is special vn chars like ư or ẻ ...
 end
 
 return M

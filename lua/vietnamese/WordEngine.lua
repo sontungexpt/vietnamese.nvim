@@ -157,7 +157,7 @@ function WordEngine:is_potential_vnword()
 			local b1, b2 = byte(c, 1, 2)
 			if b2 then -- more than 1 byte
 				-- Convert to Unicode letter
-				b1, b2 = byte(Codec.base_lower(c), 1, 2)
+				b1, b2 = byte(Codec.base(c), 1, 2)
 				if b2 then
 					-- Still not a Unicode letter
 					return false
@@ -656,7 +656,7 @@ local function processes_shape(self, method_config, tone_stragegy)
 	elseif ecount > 1 then
 		local u, o = effects[1], effects[2]
 		local uidx, oidx = u.idx, o.idx
-		local ubase, obase = Codec.base_lower(u.char), Codec.base_lower(o.char)
+		local ubase, obase = Codec.base(u.char), Codec.base(o.char)
 
 		local dual_horn = oidx < char_count -- must have the coda
 			and oidx - uidx == 1 -- must be adjacent

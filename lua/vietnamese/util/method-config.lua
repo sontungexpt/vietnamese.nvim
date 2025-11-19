@@ -61,7 +61,7 @@ local function key_to_shape(key, affected_char, method_config)
 	--- check existence of shape_keys in method_config
 	local shape_map = method_config.shape_keys[key:lower()]
 	--- Get the shape diacritic defined for the base character
-	local shape = shape_map and shape_map[Codec.base_lower(affected_char)] or nil
+	local shape = shape_map and shape_map[Codec.base(affected_char)] or nil
 	--- If the key corresponds to a shape diacritic for the base character
 	return (shape and Codec.diacritic_mergeable(affected_char, shape)) and shape or nil
 end
