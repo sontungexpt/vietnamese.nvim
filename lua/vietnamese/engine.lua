@@ -189,7 +189,10 @@ M.setup = function()
 	--- and it will break the InsertCharPre autocmd
 	--- Not only that it will have more strange behavior with buffer because the onkey may execute
 	--- before buffer is ready
-	nvim_create_autocmd({ "InsertEnter", "InsertLeave" }, {
+	nvim_create_autocmd({
+		"InsertEnter",
+		"InsertLeave",
+	}, {
 		callback = function(args)
 			if Config.is_enabled() and Config.is_buf_enabled(args.buf) and args.event == "InsertEnter" then
 				vim.on_key(function(_, typed)
@@ -202,7 +205,10 @@ M.setup = function()
 		end,
 	})
 
-	nvim_create_autocmd({ "InsertCharPre", "TextChangedI" }, {
+	nvim_create_autocmd({
+		"InsertCharPre",
+		"TextChangedI",
+	}, {
 		callback = function(args)
 			local bufnr = args.buf
 			if not Config.is_enabled() or not Config.is_buf_enabled(bufnr) then
@@ -277,12 +283,10 @@ M.setup = function()
 				local row = pos[1] -- Row is 1-indexed in API
 				local row0, col0 = row - 1, pos[2]
 
-				local new_word = word_engine:tostring()
-
 				local wstart, wend = word_engine:col_bounds(col0)
 
 				do_without_events("TextChanged,TextChangedI", function()
-					nvim_buf_set_text(0, row0, wstart, row0, wend, { new_word })
+					nvim_buf_set_text(0, row0, wstart, row0, wend, { word_engine:tostring() })
 				end)
 
 				local new_cursor_col = word_engine:get_curr_cursor_col(col0)

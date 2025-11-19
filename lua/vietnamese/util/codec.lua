@@ -576,6 +576,7 @@ local VN_CODEC = {
 	["Đ"] = 0x227,
 	[0x227] = "Đ",
 }
+local DCODE = VN_CODEC["d"]
 
 --- Check if a character is uppercase
 --- @param c string The character to checks
@@ -809,16 +810,18 @@ end
 --- Check if a character is "d" or "đ" or "D" or "Đ"
 --- @param c string The character to check
 --- @return boolean is_dD True if the character is "d" or "đ" or "D" or "Đ", false otherwise
-local is_dD = function(c)
+M.is_dD = function(c)
 	return c == "d" or c == "đ" or c == "D" or c == "Đ"
 end
-M.is_dD = is_dD
 
 --- Check if a character is a Vietnamese vowel
 --- @param c string The character to check
 --- @return boolean is_vowel True if the character is a Vietnamese vowel, false otherwise
 M.is_vn_vowel = function(c)
-	return VN_CODEC[c] and not is_dD(c)
+	local code = VN_CODEC[c]
+	--- @cast code integer
+	--- convert đ, Đ, D to d and check
+	return code and band(code, BASE_MASK) ~= DCODE or false
 end
 
 --- Check if a character is a Vietnamese character
