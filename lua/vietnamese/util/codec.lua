@@ -689,6 +689,7 @@ M.strip_tone = function(c)
 	---@diagnostic disable-next-line: return-type-mismatch
 	return code and VN_CODEC[band(code, TONE_CLEAR)] or c
 end
+
 --- Strip the tone from a character
 --- @param c string The character to strip the tone from
 --- @return string removed_tone_char The character without the tone mark (level 1 character), or the original character if no tone mark was find
@@ -795,25 +796,29 @@ M.unpack_char = function(c)
 	return VN_CODEC[band(code, BASE_MASK)], band(code, SHAPE_MASK), band(code, TONE_MASK)
 end
 
+--- Strip the tone and lower Vietnamese character
+--- @param c string The character to strip the tone and case from
+--- @return string removed_tone_case_char The character without the tone mark (level 1 character), or the original character if no tone mark was find
+M.strip_tone_case = function(c)
+	local code = VN_CODEC[c]
+	--- @cast code integer
+	---@diagnostic disable-next-line: return-type-mismatch
+	return code and VN_CODEC[band(code, band(TONE_CLEAR, CASE_CLEAR))] or c:lower()
+end
+
 --- Check if a character is "d" or "đ" or "D" or "Đ"
 --- @param c string The character to check
 --- @return boolean is_dD True if the character is "d" or "đ" or "D" or "Đ", false otherwise
-M.is_dD = function(c)
+local is_dD = function(c)
 	return c == "d" or c == "đ" or c == "D" or c == "Đ"
 end
+M.is_dD = is_dD
 
 --- Check if a character is a Vietnamese vowel
 --- @param c string The character to check
 --- @return boolean is_vowel True if the character is a Vietnamese vowel, false otherwise
 M.is_vn_vowel = function(c)
-	if not VN_CODEC[c] then
-		return false
-	end
-	local b = byte(c)
-	-- 0xC4 is first byte of đ or Đ no need to check second byte
-	-- 100 is first byte of d
-	-- 68 is first byte of D
-	return b ~= 0xC4 and b ~= 100 and b ~= 68
+	return VN_CODEC[c] and not is_dD(c)
 end
 
 --- Check if a character is a Vietnamese character

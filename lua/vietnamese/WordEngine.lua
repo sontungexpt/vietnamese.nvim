@@ -5,7 +5,7 @@ local McUtil = require("vietnamese.util.method-config")
 local Codec = require("vietnamese.util.codec")
 
 local tbl_insert, tbl_move, concat, byte = table.insert, table.move, table.concat, string.byte
-local lower_char, byte_len = Codec.lower_char, Util.byte_len
+local byte_len = Util.byte_len
 local key_to_shape = McUtil.key_to_shape
 
 local DIACRITIC = Codec.DIACRITIC
@@ -387,7 +387,7 @@ end
 local function detect_vowel_seq(chars, chars_size, vowel_start, vowel_end)
 	if vowel_start == vowel_end then
 		return VowelSeqValid, {
-			[vowel_start] = lower_char(Codec.strip_tone(chars[vowel_start])),
+			[vowel_start] = Codec.strip_tone_case(chars[vowel_start]),
 		}
 	end
 
@@ -401,7 +401,7 @@ local function detect_vowel_seq(chars, chars_size, vowel_start, vowel_end)
 	local vnorms = {}
 	-- Check if the word has a tone-marked vowel
 	for i = vowel_start, vowel_end do
-		vnorms[i] = lower_char(Codec.strip_tone(chars[i]))
+		vnorms[i] = Codec.strip_tone_case(chars[i])
 	end
 
 	local seq_map = VOWEL_SEQS[concat(vnorms, "", vowel_start, vowel_end)]
@@ -522,7 +522,6 @@ function WordEngine:analyze_structure(force)
 		self.word_state = WordInvalid
 		return self.word_state
 	elseif status == VowelSeqAmbiguous then
-		print("Ambiguous vowel sequence")
 		self.word_state = WordShapeReady
 	end
 
@@ -573,20 +572,20 @@ local function processes_tone(self, method_config, tone_stragegy)
 		return false
 	end
 
-	local lv2_vowel, removed_tone = Codec.strip_tone2(main_vowel)
-	local applying_tone = McUtil.key_to_tone(insert_char, lv2_vowel, method_config)
+	local striped, removed_tone = Codec.strip_tone2(main_vowel)
+	local applying_tone = McUtil.key_to_tone(insert_char, striped, method_config)
 
 	if not applying_tone then
 		return false
 	elseif removed_tone == applying_tone then
-		self.chars[tidx] = lv2_vowel -- restore the original vowel
+		self.chars[tidx] = striped -- restore the original vowel
 		self:input_key()
 		self.tone = nil
 		self.tone_index = -1
 	else
 		-- no tone mark found,
 		-- or the tone mark is different from the one we want to apply
-		self.chars[tidx] = Codec.merge_diacritic(lv2_vowel, applying_tone)
+		self.chars[tidx] = Codec.merge_diacritic(striped, applying_tone)
 		self.tone = applying_tone
 		self.tone_index = tidx
 	end

@@ -178,10 +178,8 @@ function M.byte_len(chars, chars_size, i, j)
 end
 
 function M.benchmark(func, ...)
-	---@diagnostic disable-next-line: undefined-field
 	local start_time = vim.uv.hrtime()
 	local result = { func(...) }
-	---@diagnostic disable-next-line: undefined-field
 	local end_time = vim.uv.hrtime()
 	local elapsed_time = (end_time - start_time) / 1e6 -- Convert to milliseconds
 
