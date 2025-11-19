@@ -8,12 +8,17 @@ local MAX_RETRY = 5
 --- @field disabled_cmd string[] The command to disable the IME
 --- @field installed boolean Indicates if the IME is installed
 --- @field disabled boolean Indicates if the IME is currently disabled
+--- @field process? vim.SystemObj The process object of the IME
 local IME = {}
 IME.__index = IME
 
+--- Constructor for the IME class
+--- @param name string The name of the IME
+--- @param enabled_cmd string[] The command to enable the IME
+--- @param disabled_cmd string[] The command to disable the IME
+--- @return IME obj The IME object
 function IME:new(name, enabled_cmd, disabled_cmd)
 	local executable = vim.fn.executable
-
 	return setmetatable({
 		name = name,
 		enabled_cmd = enabled_cmd or {},
@@ -28,13 +33,15 @@ end
 --- @param max_retries integer The maximum number of max_retries
 --- @param on_success function? Callback function to call on success
 --- @param on_error function? Callback function to call on error
+--- @param time? integer The current retry count
+--- @return vim.SystemObj|nil process The process object
 local function retry_cmd(cmd, max_retries, on_success, on_error, time)
 	time = time or 1
 	if time > max_retries then
-		return
+		return nil
 	end
 
-	vim.system(cmd, {}, function(out)
+	return vim.system(cmd, {}, function(out)
 		if out and out.code == 0 then
 			if on_success then
 				on_success(out)
@@ -48,13 +55,28 @@ local function retry_cmd(cmd, max_retries, on_success, on_error, time)
 	end)
 end
 
+--- Close the IME process
+function IME:close_curr_process()
+	local process = self.process
+	if process and not process:is_closing() then
+		process:kill(15)
+		vim.defer_fn(function()
+			if not process:is_closing() then
+				process:kill(9)
+			end
+		end, 1000)
+	end
+	self.process = nil
+end
+
 --- Enable the IME
 function IME:enable()
 	if not self.installed or not self.disabled then
 		return
 	end
+	self:close_curr_process()
 
-	retry_cmd(self.enabled_cmd, MAX_RETRY, function()
+	self.process = retry_cmd(self.enabled_cmd, MAX_RETRY, function()
 		self.disabled = false
 		require("vietnamese.notifier").info(self.name .. " has been enabled.")
 	end)
@@ -65,8 +87,9 @@ function IME:disable()
 	if not self.installed or self.disabled then
 		return
 	end
+	self:close_curr_process()
 
-	retry_cmd(self.disabled_cmd, MAX_RETRY, function()
+	self.process = retry_cmd(self.disabled_cmd, MAX_RETRY, function()
 		self.disabled = true
 		require("vietnamese.notifier").info(self.name .. " has been disabled.")
 	end)

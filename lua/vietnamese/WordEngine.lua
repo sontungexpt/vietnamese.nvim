@@ -364,7 +364,6 @@ end
 --- @return integer the index of the main vowel character if found, nil otherwise
 function WordEngine:find_tone_pos(stragegy, force_recheck)
 	if self:analyze_structure() == WordInvalid then
-		-- error(main_vowel .. " " .. tidx .. " " .. insert_idx)
 		return nil, -1
 	elseif self.vowel_start < 0 then
 		return nil, -1
@@ -553,7 +552,6 @@ function WordEngine:analyze_structure(force)
 
 	if not validate_coda(chars, char_count, ve) then
 		self.word_state = WordInvalid
-		error("Invalid coda")
 		return self.word_state
 	end
 
