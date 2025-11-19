@@ -2,6 +2,7 @@ local type = type
 local vim_bo = vim.bo
 
 local METHOD_CONFIG_PATH = "vietnamese.method."
+
 local SUPPORTED_METHODS = {
 	"telex", -- Telex input method
 	"vni", -- VNI input method
@@ -14,17 +15,14 @@ local OrthographyStragegy = {
 	OLD = "old", -- Old tone strategy
 }
 
-local M = {
-	OrthographyStragegy = OrthographyStragegy, -- Export ToneStrategy for external use
-}
+local M = {}
 
 local active_method_config = nil
 
----@type Config
+---@type UserConfig
 local default_config = {
 	enabled = true,
-	-- "old" | "modern"
-	orthography = OrthographyStragegy.MODERN, -- Default tone strategy
+	-- "old" | "modern" orthography = OrthographyStragegy.MODERN, -- Default tone strategy
 	input_method = "telex", -- Default input method
 	excluded = {
 		filetypes = {
@@ -40,6 +38,8 @@ local default_config = {
 	custom_methods = {}, -- Custom input methods
 }
 
+--- Get the current tone strategy for Vietnamese input
+--- @return OrthographyStragegy strategy The current tone strategy
 M.get_orthography_stragegy = function()
 	return default_config.orthography
 end
@@ -77,6 +77,9 @@ M.is_buf_enabled = function(bufnr)
 	return true
 end
 
+--- Enable or disable Vietnamese input
+--- @param enabled boolean True to enable Vietnamese input, false to disable
+--- @return boolean enabled True if Vietnamese input is enabled, false otherwise
 M.set_enabled = function(enabled)
 	default_config.enabled = enabled
 	if enabled then
@@ -94,11 +97,13 @@ M.toggle_enabled = function()
 	return M.set_enabled(not default_config.enabled)
 end
 
-function M.get_input_method()
+--- Get the current input method
+--- @return string input_method The current input method
+M.get_input_method = function()
 	return default_config.input_method
 end
 
-function M.set_input_method(method)
+M.set_input_method = function(method)
 	default_config.input_method = method or "telex"
 	active_method_config = nil -- Reset cached method config
 end
@@ -142,11 +147,9 @@ M.set_user_config = function(user_config)
 	merge_user_config(default_config, user_config)
 end
 
-M.get_config = function()
-	return default_config
-end
-
-function M.get_method_config()
+--- Get the current method config
+--- @return MethodConfig method_config The current method config
+M.get_method_config = function()
 	if active_method_config then
 		return active_method_config
 	end
@@ -164,9 +167,15 @@ function M.get_method_config()
 end
 
 --- Get a list of all supported input methods
---- @return string[]
-function M.get_support_methods()
+--- @return string[] methods A list of all supported input methods
+M.get_supported_methods = function()
 	return vim.list_extend(vim.deepcopy(SUPPORTED_METHODS), vim.tbl_keys(default_config.custom_methods))
+end
+
+--- Get a list of all supported tone strategies
+--- @return string[] strategies A list of all supported tone strategies
+M.get_supported_orthography_strategies = function()
+	return vim.tbl_values(OrthographyStragegy)
 end
 
 return M

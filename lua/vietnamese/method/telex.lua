@@ -13,11 +13,6 @@ local M = {
 		["z"] = true,
 	},
 	shape_keys = {
-		-- a = { a = ENUM_DIACRITIC.CIRCUMFLEX, w = ENUM_DIACRITIC.BREVE },
-		-- e = { e = ENUM_DIACRITIC.CIRCUMFLEX, w = ENUM_DIACRITIC.CIRCUMFLEX },
-		-- o = { o = ENUM_DIACRITIC.CIRCUMFLEX, w = ENUM_DIACRITIC.HORN },
-		-- u = { u = ENUM_DIACRITIC.HORN, w = ENUM_DIACRITIC.HORN },
-		-- d = { d = ENUM_DIACRITIC.HORIZONTAL_STROKE },
 
 		w = {
 			a = DIACRITIC.Breve,

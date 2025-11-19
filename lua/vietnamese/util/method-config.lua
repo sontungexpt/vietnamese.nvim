@@ -84,55 +84,56 @@ function M.key_to_diacritic(key, affected_char, method_config)
 	return nil
 end
 
-function M.is_diacritic_applicable(diacritic_key, applied_char, method_config)
-	return M.key_to_diacritic(diacritic_key, applied_char, method_config) ~= nil
-end
-
+--- Validate the method configuration.
+--- @param method_config MethodConfig The method configuration to validate.
+--- @return boolean valid True if the method configuration is valid, false otherwise.
 function M.validate_config(method_config)
 	local notifier = require("vietnamese.notifier")
-
 	if type(method_config) ~= "table" then
 		notifier.error("Method configuration must be a table.")
 		return false
 	end
-	-- tone key and shape key must be different
-	for key, _ in pairs(method_config.tone_keys) do
-		if method_config.shape_keys[key] then
-			notifier.error("Key '" .. key .. "' is both a tone key and a shape key in the method configuration.")
-			return false
-		end
-	end
-	for key, _ in pairs(method_config.shape_keys) do
-		if method_config.tone_keys[key] then
-			notifier.error("Key '" .. key .. "' is both a shape key and a tone key in the method configuration.")
+
+	local tone_keys = method_config.tone_keys or {}
+	local shape_keys = method_config.shape_keys or {}
+	local tone_rmv_keys = method_config.tone_removal_keys or {}
+
+	----------------------------------------------------------------------
+	-- 1. Check duplicate keys among tone_keys, shape_keys, tone_rmv_keys
+	----------------------------------------------------------------------
+
+	-- check tone vs shape
+	for key in pairs(tone_keys) do
+		if shape_keys[key] then
+			notifier.error("Key '" .. key .. "' is both a tone key and a shape key.")
 			return false
 		end
 	end
 
-	for key, _ in pairs(method_config.tone_removal_keys) do
-		if method_config.tone_keys[key] then
-			notifier.error("Key '" .. key .. "' is both a tone removal key and a tone key in the method configuration.")
+	-- check tone_rmv vs tone + shape
+	for key in pairs(tone_rmv_keys) do
+		if tone_keys[key] then
+			notifier.error("Key '" .. key .. "' is both a tone removal key and a tone key.")
 			return false
-		elseif method_config.shape_keys[key] then
-			notifier.error(
-				"Key '" .. key .. "' is both a tone removal key and a shape key in the method configuration."
-			)
+		end
+		if shape_keys[key] then
+			notifier.error("Key '" .. key .. "' is both a tone removal key and a shape key.")
 			return false
 		end
 	end
 
-	-- if u or o is map with horn, then both u o is map for that key
-	for key, shape_map in pairs(method_config.shape_keys) do
-		if shape_map["u"] == DIACRITIC.Horn and shape_map["o"] ~= DIACRITIC.Horn then
-			notifier.error(
-				"Both 'u' and 'o' must be mapped to the same Horn for key '" .. key .. "' in the method configuration."
-			)
-			return false
-		elseif shape_map["o"] == DIACRITIC.Horn and shape_map["u"] ~= DIACRITIC.Horn then
-			notifier.error(
-				"Both 'u' and 'o' must be mapped to the same Horn for key '" .. key .. "' in the method configuration."
-			)
-			return false
+	----------------------------------------------------------------------
+	-- 2. Optimize Horn rule check for u / o
+	----------------------------------------------------------------------
+	for key, m in pairs(shape_keys) do
+		local u = m["u"]
+		local o = m["o"]
+		-- If either u or o is mapped to Horn
+		if u == DIACRITIC.Horn or o == DIACRITIC.Horn then
+			if not (u == DIACRITIC.Horn and o == DIACRITIC.Horn) then
+				notifier.error("Both 'u' and 'o' must be mapped to Horn for key '" .. key .. "'.")
+				return false
+			end
 		end
 	end
 

@@ -67,7 +67,7 @@ WordEngine.__index = WordEngine
 --- @param index integer           The position (1-based) where `value` will be inserted.
 --- @return any[] new_array        The newly created array.
 --- @return integer new_length     The updated size of the new array.
-local function clone_with_insert(source, length, value, index)
+local clone_with_insert = function(source, length, value, index)
 	local new_length = length + 1
 	local new_array = {}
 
@@ -87,18 +87,18 @@ local function clone_with_insert(source, length, value, index)
 	return new_array, new_length
 end
 
---- Cr-eates a new CursorWord instance
---- @param cword table a table of characters representing the word
---- @param cwlen integer the length of the word
+--- Creates a new WordEngine instance.
+--- @param chars table a table of characters representing the word
+--- @param char_count integer the length of the word
 --- @param insert_key string the character at the cursor position
 --- @param insert_idx integer the index of the cursor character (1-based)
 --- @return WordEngine  instance
-function WordEngine:new(cword, cwlen, insert_key, insert_idx)
-	local orig_chars, org_count = clone_with_insert(cword, cwlen, insert_key, insert_idx)
+function WordEngine:new(chars, char_count, insert_key, insert_idx)
+	local orig_chars, org_count = clone_with_insert(chars, char_count, insert_key, insert_idx)
 
 	local obj = setmetatable({
-		chars = cword,
-		char_count = cwlen,
+		chars = chars,
+		char_count = char_count,
 		orig_chars = orig_chars,
 		orig_count = org_count,
 
@@ -203,12 +203,6 @@ function WordEngine:is_potential_diacritic_key(method_config)
 	return false
 end
 
---- Returns the cursor position in the character list
---- @return string the character at the cursor position
-function WordEngine:inserted_key()
-	return self.insert_char
-end
-
 --- Processes the new vowel character at the cursor position
 --- @param method_config table the method configuration to use for processing
 --- @param tone_stragegy OrthographyStragegy the strategy to use for finding the main vowel position, defaults to "modern"
@@ -222,25 +216,6 @@ function WordEngine:processes_new_vowel(method_config, tone_stragegy)
 		return self:update_tone_pos(method_config, tone_stragegy)
 	end
 	return false
-end
-
---- Copies the raw character list to the word character list
-function WordEngine:restore_raw(ovverides)
-	local word, word_len, raw, raw_len = self.chars, self.char_count, self.orig_chars, self.orig_count
-	local stop = word_len > raw_len and word_len or raw_len
-
-	if not ovverides or next(ovverides) == nil then
-		for i = 1, stop do
-			word[i] = raw[i]
-		end
-	else
-		for i = 1, stop do
-			word[i] = ovverides[i] or raw[i]
-		end
-	end
-
-	-- update new len
-	self.char_count = raw_len
 end
 
 --- Inserts the character at the cursor position into the word
@@ -547,6 +522,7 @@ function WordEngine:analyze_structure(force)
 		self.word_state = WordInvalid
 		return self.word_state
 	elseif status == VowelSeqAmbiguous then
+		print("Ambiguous vowel sequence")
 		self.word_state = WordShapeReady
 	end
 

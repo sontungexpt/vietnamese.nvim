@@ -32,10 +32,14 @@ local WORST_CASE_WORD_LEN = THRESHOLD_WORD_LEN * 2 + 2
 local M = {}
 
 --- Check if a character is a valid input character for the current method
+--- @param char string Character to check
+--- @param method_config MethodConfig The method configuration
+--- @return boolean
 local is_diacritic_pressed = function(char, method_config)
 	if type(method_config.is_diacritic_pressed) == "function" then
 		return method_config.is_diacritic_pressed(char)
 	end
+
 	local McUtil = require("vietnamese.util.method-config")
 	return McUtil.is_tone_key(char, method_config)
 		or McUtil.is_tone_removal_key(char, method_config)
@@ -188,7 +192,7 @@ M.setup = function()
 	nvim_create_autocmd({ "InsertEnter", "InsertLeave" }, {
 		callback = function(args)
 			if Config.is_enabled() and Config.is_buf_enabled(args.buf) and args.event == "InsertEnter" then
-				vim.on_key(function(key, typed)
+				vim.on_key(function(_, typed)
 					is_delete_pressed = is_backspace(typed) or is_delete(typed)
 					inserted_char = typed
 				end, NAMESPACE)
