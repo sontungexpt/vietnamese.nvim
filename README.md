@@ -147,10 +147,7 @@ Command:
 
 ## ✅ NOTES
 
-- Khuyến khích mọi người chuyển sang tiếng anh cho các IME hệ thống trước khi xài plugins,
-  vì hiện tại mình chưa xử lí kĩ phần này
-
----
+- Khuyến khích mọi người tắt luôn ime hệ thống cho cửa sỗ terminal để có trải nghiẻm tót nhất.
 
 ## 🧩 Phát triển & Góp ý
 
