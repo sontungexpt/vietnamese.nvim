@@ -28,12 +28,9 @@
           "sontungexpt/vietnamese.nvim",
           dependencies = {
             "sontungexpt/bim.nvim",
-            "nvim-web-devicons",
           },
           event = "InsertEnter",
-          config = function()
-            require("vietnamese").setup()
-          end,
+          opts = {}
         },
 ```
 
