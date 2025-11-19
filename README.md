@@ -80,7 +80,8 @@ require("vietnamese").setup({
         name = {
 
             -- nhớ import ENUM_DIACRITIC from vietnamese.constant trên đầu file config để lấy enum
-            -- local ENUM_DIACRITIC = require("vietnamese.constant").Diacritic
+
+            -- local ENUM_DIACRITIC = require("vietnamese.util.codec").DIACRITIC
 
             tone_keys = {
                 ["s"] = ENUM_DIACRITIC.Acute,
@@ -113,12 +114,11 @@ require("vietnamese").setup({
                 },
 
                 d = {
-                    d = ENUM_DIACRITIC.HorizontalStroke,
+                    d = ENUM_DIACRITIC.Stroke,
                 },
             },
 
             -- Check if a character is a valid input character to make a Vietnamese character
-            --
             is_diacritic_pressed = function(char)
                 return char:lower():match("[sfrxjzawdeo]") ~= nil
             end,
