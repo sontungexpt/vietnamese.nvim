@@ -313,7 +313,7 @@ local function find_modern_tone_pos(word, wlen, vs, ve, vnorms)
 	local v_seq = concat(vnorms, "", vs, ve)
 	local precomputed = VOWEL_SEQS[v_seq]
 	if precomputed then
-		local mvi = vs + precomputed[1]
+		local mvi = vs + precomputed
 		return word[mvi], mvi
 	end
 

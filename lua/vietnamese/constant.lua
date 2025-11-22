@@ -21,80 +21,82 @@ M = {
 
 		["y"] = 11,
 	},
-	--- @type table<string, {[0]: number?}|boolean>
+	--- Key is the normalized vowel sequence
+	--- Value is the position of the main vowel or false if it is not a valid vowel until adding shape
+	--- @type table<string, number|boolean>
 	VOWEL_SEQS = {
 		-- a
-		["ai"] = { 0 },
-		["ao"] = { 0 },
-		["au"] = { 0 },
-		["âu"] = { 0 },
-		["ay"] = { 0 },
-		["ây"] = { 0 },
+		["ai"] = 0,
+		["ao"] = 0,
+		["au"] = 0,
+		["âu"] = 0,
+		["ay"] = 0,
+		["ây"] = 0,
 
-		["ia"] = { 0 },
+		["ia"] = 0,
 		["ie"] = false, --transitional, not a valid vowel
-		["iê"] = { 1 },
-		["iu"] = { 0 },
-		["iêu"] = { 1 },
+		["iê"] = 1,
+		["iu"] = 0,
+		["iêu"] = 1,
 
 		["ye"] = false, -- transitional, not a valid vowel
-		["yê"] = { 1 },
-		["yêu"] = { 1 },
+		["yê"] = 1,
+		["yêu"] = 1,
 
-		["eo"] = { 0 },
+		["eo"] = 0,
 
 		["eu"] = false, -- transitional, not a valid vowel
-		["êu"] = { 0 },
+		["êu"] = 0,
 
-		["oa"] = { 1 },
-		["oă"] = { 1 },
-		["oay"] = { 1 },
-		["oai"] = { 1 },
-		["oau"] = { 1 },
-		["oao"] = { 1 },
+		["oa"] = 1,
+		["oă"] = 1,
+		["oay"] = 1,
+		["oai"] = 1,
+		["oau"] = 1,
+		["oao"] = 1,
 		["oo"] = false,
-		["oi"] = { 0 },
-		["ôi"] = { 0 },
-		["ơi"] = { 0 },
-		["oe"] = { 1 },
-		["oeo"] = { 1 },
+		["oi"] = 0,
+		["ôi"] = 0,
+		["ơi"] = 0,
+		["oe"] = 1,
+		["oeo"] = 1,
 
-		["ua"] = { 0 },
-		["uao"] = { 1 },
-		["ưa"] = { 0 },
-		["uâ"] = { 1 },
-		["uây"] = { 1 },
+		["ua"] = 0,
+		["uao"] = 1,
+		["ưa"] = 0,
+		["uâ"] = 1,
+		["uây"] = 1,
 		["ue"] = false,
-		["uê"] = { 1 },
-		["ui"] = { 0 },
-		["ưi"] = { 0 },
-		["uy"] = { 1 },
-		["uyu"] = { 1 },
-		["uya"] = { 1 },
+		["uê"] = 1,
+		["ui"] = 0,
+		["ưi"] = 0,
+		["uy"] = 1,
+		["uyu"] = 1,
+		["uya"] = 1,
 
 		["uye"] = false, -- transitional, not a valid vowel
-		["uyê"] = { 2 },
+		["uyê"] = 2,
 
 		["uu"] = false, -- transitional, not a valid vowel
-		["ưu"] = { 0 },
+		["ưu"] = 0,
 
 		["uo"] = false, -- transitional, not a valid vowel
-		["uô"] = { 1 },
-		["uôi"] = { 1 },
+		["uô"] = 1,
+		["uôi"] = 1,
 
 		["ưo"] = false, -- transitional, not a valid vowel
-		["uơ"] = { 1 },
-		["ươ"] = { 1 },
+		["uơ"] = 1,
+		["ươ"] = 1,
 
 		["uoi"] = false, -- transitional, not a valid vowel
 		["uơi"] = false, -- transitional, not a valid vowel
 		["ưoi"] = false, -- transitional, not a valid vowel
-		["ươi"] = { 1 },
+		["ươi"] = 1,
 
 		["uou"] = false, -- transitional, not a valid vowel
 		["uơu"] = false, -- transitional, not a valid vowel
 		["ưou"] = false, -- transitional, not a valid vowel
-		["ươu"] = { 1 },
+		["ươu"] = 1,
 	},
 	ONSETS = {
 		["b"] = true,
