@@ -37,6 +37,7 @@ M = {
 		["ie"] = false, --transitional, not a valid vowel
 		["iê"] = 1,
 		["iu"] = 0,
+		["ieu"] = false,
 		["iêu"] = 1,
 
 		["ye"] = false, -- transitional, not a valid vowel
