@@ -425,7 +425,11 @@ local function detect_onset(chars, vowel_start, vowel_end)
 		return -1
 	elseif cluster_len == 1 then
 		local c1 = chars[1]
-		if vowel_end > vowel_start and ONSETS[(c1 .. chars[2]):lower()] then
+		if c1 == "Đ" then
+			-- special case: "Đ"
+			-- Đ can not be slower with string.lower so treat as special case
+			return 1
+		elseif vowel_end > vowel_start and ONSETS[(c1 .. chars[2]):lower()] then
 			-- Special case: consonant overlaps with vowel
 			-- e.g "qu", "gi"
 			return 2
