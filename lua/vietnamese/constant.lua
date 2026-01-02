@@ -42,6 +42,7 @@ M = {
 
 		["ye"] = false, -- transitional, not a valid vowel
 		["yê"] = 1,
+		["yeu"] = false,
 		["yêu"] = 1,
 
 		["eo"] = 0,
