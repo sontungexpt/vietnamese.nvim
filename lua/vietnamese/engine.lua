@@ -133,10 +133,12 @@ local function extract_vn_word(bufnr, row0, col0)
 		return nil, 0, 0
 	end
 
-	-- Cursor column (col0) is relative to the whole line,
-	-- but `chunk` starts at `start_col`.
-	-- Convert cursor position into a byte offset relative to `chunk`
-	-- so we can safely split the chunk into left/right parts.
+	-- Cursor byte offset relative to the beginning of `chunk`.
+	-- Example:
+	--   start_col = 10, col0 = 15 => cursor_off = 5
+	--   chunk = [10, 20)
+	--   left  = chunk:sub(1, cursor_off)
+	--   right = chunk:sub(cursor_off + 1)
 	local cursor_off = col0 - start_col
 
 	-- Split chunk into left (before cursor) and right (from cursor)
