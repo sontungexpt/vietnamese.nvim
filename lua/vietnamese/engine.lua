@@ -46,74 +46,74 @@ local is_diacritic_pressed = function(char, method_config)
 		or McUtil.is_shape_key(char, method_config)
 end
 
---- Get valid Vietnamese characters to the **left** of the cursor.
---- It fetches chunks of text from the left side, expanding by THRESHOLD_WORD_LEN each time.
---- It collects characters that are valid Vietnamese letters and stops when a non-Vietnamese char is found.
---- @param bufnr integer: Buffer number
---- @param row0 integer: Cursor row (0-based)
---- @param col0 integer: Cursor column (0-based)
---- @return string[] chars List of left characters (from closest to furthest from cursor)
---- @return integer size Length of left_chars collected
-local function scan_left_word_segment(bufnr, row0, col0)
-	-- Get the text from start_col to end_col
-	local text_chunk = nvim_buf_get_text(
-		bufnr,
-		row0,
-		col0 - WORST_CASE_WORD_LEN > 0 and col0 - WORST_CASE_WORD_LEN or 0,
-		row0,
-		col0,
-		{}
-	)[1]
-	if not text_chunk or text_chunk == "" then
-		return {}, 0
-	end
+-- --- Get valid Vietnamese characters to the **left** of the cursor.
+-- --- It fetches chunks of text from the left side, expanding by THRESHOLD_WORD_LEN each time.
+-- --- It collects characters that are valid Vietnamese letters and stops when a non-Vietnamese char is found.
+-- --- @param bufnr integer: Buffer number
+-- --- @param row0 integer: Cursor row (0-based)
+-- --- @param col0 integer: Cursor column (0-based)
+-- --- @return string[] chars List of left characters (from closest to furthest from cursor)
+-- --- @return integer size Length of left_chars collected
+-- local function scan_left_word_segment(bufnr, row0, col0)
+-- 	-- Get the text from start_col to end_col
+-- 	local text_chunk = nvim_buf_get_text(
+-- 		bufnr,
+-- 		row0,
+-- 		col0 - WORST_CASE_WORD_LEN > 0 and col0 - WORST_CASE_WORD_LEN or 0,
+-- 		row0,
+-- 		col0,
+-- 		{}
+-- 	)[1]
+-- 	if not text_chunk or text_chunk == "" then
+-- 		return {}, 0
+-- 	end
 
-	local chars, n = {}, 0 -- Table to store characters we collect
-	for _, ch in iter_chars_reverse(text_chunk) do
-		if is_vn_char(ch) then
-			n = n + 1
-			chars[n] = ch
-		else
-			break -- Stop collecting if we hit a non-Vietnamese character
-		end
+-- 	local chars, n = {}, 0 -- Table to store characters we collect
+-- 	for _, ch in iter_chars_reverse(text_chunk) do
+-- 		if is_vn_char(ch) then
+-- 			n = n + 1
+-- 			chars[n] = ch
+-- 		else
+-- 			break -- Stop collecting if we hit a non-Vietnamese character
+-- 		end
 
-		if n == THRESHOLD_WORD_LEN then
-			break
-		end
-	end
+-- 		if n == THRESHOLD_WORD_LEN then
+-- 			break
+-- 		end
+-- 	end
 
-	return reverse_list(chars, n), n
-end
+-- 	return reverse_list(chars, n), n
+-- end
 
---- Get valid Vietnamese characters to the **right** of the cursor.
---- It fetches chunks of text from the right side, expanding by THRESHOLD_WORD_LEN each time.
---- It collects characters that are valid Vietnamese letters and stops when a non-Vietnamese char is found.
---- @param bufnr integer: Buffer number
---- @param row0 integer: Cursor row (0-based)
---- @param col0 integer: Cursor column (0-based)
---- @return string[] chars List of right characters (from closest to furthest from cursor)
---- @return integer size Length of right_chars collected
-local function scan_right_word_segment(bufnr, row0, col0)
-	local text_chunk = nvim_buf_get_text(bufnr, row0, col0, row0, col0 + WORST_CASE_WORD_LEN, {})[1]
-	if not text_chunk or text_chunk == "" then
-		return {}, 0
-	end
+-- --- Get valid Vietnamese characters to the **right** of the cursor.
+-- --- It fetches chunks of text from the right side, expanding by THRESHOLD_WORD_LEN each time.
+-- --- It collects characters that are valid Vietnamese letters and stops when a non-Vietnamese char is found.
+-- --- @param bufnr integer: Buffer number
+-- --- @param row0 integer: Cursor row (0-based)
+-- --- @param col0 integer: Cursor column (0-based)
+-- --- @return string[] chars List of right characters (from closest to furthest from cursor)
+-- --- @return integer size Length of right_chars collected
+-- local function scan_right_word_segment(bufnr, row0, col0)
+-- 	local text_chunk = nvim_buf_get_text(bufnr, row0, col0, row0, col0 + WORST_CASE_WORD_LEN, {})[1]
+-- 	if not text_chunk or text_chunk == "" then
+-- 		return {}, 0
+-- 	end
 
-	local chars, n = {}, 0
-	for _, ch in iter_chars(text_chunk) do
-		if is_vn_char(ch) then
-			n = n + 1
-			chars[n] = ch
-		else
-			break -- Stop collecting if we hit a non-Vietnamese character
-		end
-		if n == THRESHOLD_WORD_LEN then
-			break -- Stop if we reach the threshold
-		end
-	end
+-- 	local chars, n = {}, 0
+-- 	for _, ch in iter_chars(text_chunk) do
+-- 		if is_vn_char(ch) then
+-- 			n = n + 1
+-- 			chars[n] = ch
+-- 		else
+-- 			break -- Stop collecting if we hit a non-Vietnamese character
+-- 		end
+-- 		if n == THRESHOLD_WORD_LEN then
+-- 			break -- Stop if we reach the threshold
+-- 		end
+-- 	end
 
-	return chars, n
-end
+-- 	return chars, n
+-- end
 
 --- Main function to extract a processable Vietnamese word under cursor.
 --- Combines characters from left of the cursor, the cursor character itself, and characters to the right.
@@ -125,20 +125,60 @@ end
 --- @return integer size Length of the word
 --- @return integer start_idx Index of the inserted character
 local function extract_vn_word(bufnr, row0, col0)
-	-- Get both sides of the word
-	local left_chars, left_len = scan_left_word_segment(bufnr, row0, col0)
-	if left_len == THRESHOLD_WORD_LEN or left_len < 1 then
+	-- Read a single window around cursor to avoid two RPCs per keystroke
+	local start_col = col0 - WORST_CASE_WORD_LEN > 0 and col0 - WORST_CASE_WORD_LEN or 0
+	local end_col = col0 + WORST_CASE_WORD_LEN
+	local chunk = nvim_buf_get_text(bufnr, row0, start_col, row0, end_col, {})[1] or ""
+	if chunk == "" then
 		return nil, 0, 0
 	end
 
-	local right_chars, right_len = scan_right_word_segment(bufnr, row0, col0)
+	-- Cursor column (col0) is relative to the whole line,
+	-- but `chunk` starts at `start_col`.
+	-- Convert cursor position into a byte offset relative to `chunk`
+	-- so we can safely split the chunk into left/right parts.
+	local cursor_off = col0 - start_col
 
-	local char_count = left_len + right_len
-	if char_count >= THRESHOLD_WORD_LEN then
+	-- Split chunk into left (before cursor) and right (from cursor)
+	local left_str = cursor_off > 0 and chunk:sub(1, cursor_off) or ""
+	local right_str = chunk:sub(cursor_off + 1)
+
+	-- Collect left chars (closest to cursor -> reverse to normal order)
+	local left_chars_tmp, left_n = {}, 0
+	for _, ch in iter_chars_reverse(left_str) do
+		if is_vn_char(ch) then
+			left_n = left_n + 1
+			left_chars_tmp[left_n] = ch
+		else
+			break
+		end
+		if left_n == THRESHOLD_WORD_LEN then
+			break
+		end
+	end
+	local left_chars = reverse_list(left_chars_tmp, left_n)
+
+	-- Collect right chars
+	local right_chars, right_n = {}, 0
+	for _, ch in iter_chars(right_str) do
+		if is_vn_char(ch) then
+			right_n = right_n + 1
+			right_chars[right_n] = ch
+		else
+			break
+		end
+		if right_n == THRESHOLD_WORD_LEN then
+			break
+		end
+	end
+
+	local char_count = left_n + right_n
+	if char_count >= THRESHOLD_WORD_LEN or left_n < 1 then
 		return nil, 0, 0
 	end
-	local chars = tbl_move(right_chars, 1, right_len, left_len + 1, left_chars)
-	return chars, char_count, left_len + 1
+
+	local chars = tbl_move(right_chars, 1, right_n, left_n + 1, left_chars)
+	return chars, char_count, left_n + 1
 end
 
 --- Calls a function without triggering events
@@ -191,7 +231,6 @@ M.setup = function()
 	--- and it will break the InsertCharPre autocmd
 	--- Not only that it will have more strange behavior with buffer because the onkey may execute
 	--- before buffer is ready
-	---
 	local function enable(bufnr)
 		if on_key_bufnr_enabled == bufnr then
 			return
