@@ -165,6 +165,8 @@ M.setup = function()
 	local is_aeiouy_pressed = false
 	local is_diacritic_key_pressed = false
 
+	local on_key_bufnr_enabled = nil
+
 	local reset_state = function()
 		current_word = nil
 		current_word_len = 0
@@ -189,21 +191,48 @@ M.setup = function()
 	--- and it will break the InsertCharPre autocmd
 	--- Not only that it will have more strange behavior with buffer because the onkey may execute
 	--- before buffer is ready
-	nvim_create_autocmd({
-		"InsertEnter",
-		"InsertLeave",
-	}, {
+	---
+	local function enable(bufnr)
+		if on_key_bufnr_enabled == bufnr then
+			return
+		end
+
+		if not Config.is_enabled() then
+			return
+		end
+
+		if not Config.is_buf_enabled(bufnr) then
+			return
+		end
+
+		on_key_bufnr_enabled = bufnr
+		vim.on_key(function(_, typed)
+			is_delete_pressed = is_backspace(typed) or is_delete(typed)
+			inserted_char = typed
+		end, NAMESPACE)
+	end
+
+	local function disable()
+		on_key_bufnr_enabled = nil
+		vim.on_key(nil, NAMESPACE)
+	end
+
+	-- Autocmd to manage on_key while entering/leaving insert
+	nvim_create_autocmd({ "InsertEnter", "InsertLeave" }, {
 		callback = function(args)
-			if Config.is_enabled() and Config.is_buf_enabled(args.buf) and args.event == "InsertEnter" then
-				vim.on_key(function(_, typed)
-					is_delete_pressed = is_backspace(typed) or is_delete(typed)
-					inserted_char = typed
-				end, NAMESPACE)
+			if args.event == "InsertEnter" then
+				enable(args.buf)
 			else
-				vim.on_key(nil, NAMESPACE)
+				disable()
 			end
 		end,
 	})
+
+	vim.schedule(function()
+		if vim.api.nvim_get_mode().mode:match("^i") then
+			enable(api.nvim_get_current_buf())
+		end
+	end)
 
 	nvim_create_autocmd({
 		"InsertCharPre",
