@@ -22,7 +22,8 @@ local active_method_config = nil
 ---@type UserConfig
 local default_config = {
 	enabled = true,
-	-- "old" | "modern" orthography = OrthographyStragegy.MODERN, -- Default tone strategy
+	-- "old" | "modern"
+	orthography = OrthographyStragegy.MODERN, -- Default tone strategy
 	input_method = "telex", -- Default input method
 	excluded = {
 		filetypes = {
@@ -41,7 +42,7 @@ local default_config = {
 --- Get the current tone strategy for Vietnamese input
 --- @return OrthographyStragegy strategy The current tone strategy
 M.get_orthography_stragegy = function()
-	return default_config.orthography
+	return default_config.orthography or OrthographyStragegy.MODERN
 end
 
 --- Set the tone strategy for Vietnamese input
