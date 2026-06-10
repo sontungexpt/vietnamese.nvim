@@ -317,58 +317,61 @@ M.setup = function()
 			else
 				is_inserting = false
 
-				-- nothing to handle
-				if not current_word then
-					return
-				end
+				Util.benchmark(function()
+					-- nothing to handle
+					if not current_word then
+						return
+					end
 
-				local method_config = get_method_config()
-				if not method_config then
-					reset_state()
-					return
-				end
+					local method_config = get_method_config()
+					if not method_config then
+						reset_state()
+						return
+					end
 
-				local changed = false
-				local word_engine = WordEngine:new(current_word, current_word_len, inserted_char, inserted_idx)
+					local changed = false
+					-- local word_state = WordEngine:new(current_word, current_word_len, inserted_char, inserted_idx)
+					local word_state = WordEngine.acquire(current_word, current_word_len, inserted_char, inserted_idx)
 
-				-- check the diacritic key first
-				if
-					is_diacritic_key_pressed
-					and word_engine:is_potential_diacritic_key(method_config)
-					and word_engine:is_potential_vnword()
-				then
-					changed = word_engine:processes_diacritic(method_config, get_orthography_stragegy())
-				end
-				-- if not changed, then check the vowel
-				if not changed and is_aeiouy_pressed then
-					changed = word_engine:processes_new_vowel(method_config, get_orthography_stragegy())
-				end
-				-- if still not changed, then end
-				if not changed then
-					reset_state()
-					return
-				end
+					-- check the diacritic key first
+					if
+						is_diacritic_key_pressed
+						and WordEngine.is_potential_diacritic_key(word_state, method_config)
+						and WordEngine.is_potential_vnword(word_state)
+					then
+						changed = WordEngine.processes_diacritic(word_state, method_config, get_orthography_stragegy())
+					end
+					-- if not changed, then check the vowel
+					if not changed and is_aeiouy_pressed then
+						changed = WordEngine.processes_new_vowel(word_state, method_config, get_orthography_stragegy())
+					end
+					-- if still not changed, then end
+					if not changed then
+						reset_state()
+						return
+					end
 
-				local pos = nvim_win_get_cursor(0)
-				local row = pos[1] -- Row is 1-indexed in API
-				local row0, col0 = row - 1, pos[2]
+					local pos = nvim_win_get_cursor(0)
+					local row = pos[1] -- Row is 1-indexed in API
+					local row0, col0 = row - 1, pos[2]
 
-				local wstart, wend = word_engine:col_bounds(col0)
+					local wstart, wend = WordEngine.col_bounds(word_state, col0)
 
-				do_without_events("TextChanged,TextChangedI", function()
-					nvim_buf_set_text(0, row0, wstart, row0, wend, { word_engine:tostring() })
-				end)
-
-				local new_cursor_col = word_engine:get_curr_cursor_col(col0)
-
-				if col0 ~= new_cursor_col then
-					-- Restore cursor position
-					do_without_events("CursorMoved,CursorMovedI", function()
-						nvim_win_set_cursor(0, { row, new_cursor_col })
+					do_without_events("TextChanged,TextChangedI", function()
+						nvim_buf_set_text(0, row0, wstart, row0, wend, { WordEngine.tostring(word_state) })
 					end)
-				end
 
-				reset_state()
+					local new_cursor_col = WordEngine.get_curr_cursor_col(word_state, col0)
+
+					if col0 ~= new_cursor_col then
+						-- Restore cursor position
+						do_without_events("CursorMoved,CursorMovedI", function()
+							nvim_win_set_cursor(0, { row, new_cursor_col })
+						end)
+					end
+
+					reset_state()
+				end)
 			end
 		end,
 	})

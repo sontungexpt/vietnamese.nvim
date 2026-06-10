@@ -184,7 +184,7 @@ function M.benchmark(func, ...)
 	local elapsed_time = (end_time - start_time) / 1e6 -- Convert to milliseconds
 
 	-- print to file
-	local path = "/home/stilux/Data/Workspace/neovim-plugins/vietnamese.nvim/lua/benchmark.log"
+	local path = "/home/stilux/Data/workspace/neovim-plugins/vietnamese.nvim/lua/benchmark.log"
 	local file = io.open(path, "a")
 	if file then
 		file:write(string.format("Benchmark: %s took %.2f ms\n", func, elapsed_time))
