@@ -57,12 +57,10 @@ end
 --------------------------------------------------
 function M.detect_backend()
 	for _, b in ipairs(registry) do
-		pcall(function()
-			if b.is_available and b.is_available() then
-				M.backend = b
-				return
-			end
-		end)
+		if b.is_available and b.is_available() then
+			M.backend = b
+			return
+		end
 	end
 end
 
@@ -256,12 +254,8 @@ end
 --------------------------------------------------
 function M.setup()
 	-- Register built-in backends if not already registered
-	pcall(function()
-		M.register_backend(require("vietnamese.system-ime.backends.fcitx5"))
-	end)
-	pcall(function()
-		M.register_backend(require("vietnamese.system-ime.backends.ibus"))
-	end)
+	M.register_backend(require("vietnamese.system-ime.backends.fcitx5"))
+	M.register_backend(require("vietnamese.system-ime.backends.ibus"))
 
 	-- Detect backend
 	M.detect_backend()
