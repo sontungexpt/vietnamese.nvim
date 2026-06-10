@@ -21,9 +21,6 @@ function M.setup()
 		return
 	end
 
-	-- Start daemon if not already running (non-blocking)
-	vim.system({ "ibus-daemon", "-drx" }, {}, function() end)
-
 	M.initialized = true
 end
 

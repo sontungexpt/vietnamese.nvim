@@ -20,9 +20,6 @@ function M.setup()
 		return
 	end
 
-	-- Non-blocking ping to warm up daemon
-	vim.system({ "fcitx5-remote" }, {}, function() end)
-
 	M.initialized = true
 end
 
