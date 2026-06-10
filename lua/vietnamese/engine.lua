@@ -46,75 +46,6 @@ local is_diacritic_pressed = function(char, method_config)
 		or McUtil.is_shape_key(char, method_config)
 end
 
--- --- Get valid Vietnamese characters to the **left** of the cursor.
--- --- It fetches chunks of text from the left side, expanding by THRESHOLD_WORD_LEN each time.
--- --- It collects characters that are valid Vietnamese letters and stops when a non-Vietnamese char is found.
--- --- @param bufnr integer: Buffer number
--- --- @param row0 integer: Cursor row (0-based)
--- --- @param col0 integer: Cursor column (0-based)
--- --- @return string[] chars List of left characters (from closest to furthest from cursor)
--- --- @return integer size Length of left_chars collected
--- local function scan_left_word_segment(bufnr, row0, col0)
--- 	-- Get the text from start_col to end_col
--- 	local text_chunk = nvim_buf_get_text(
--- 		bufnr,
--- 		row0,
--- 		col0 - WORST_CASE_WORD_LEN > 0 and col0 - WORST_CASE_WORD_LEN or 0,
--- 		row0,
--- 		col0,
--- 		{}
--- 	)[1]
--- 	if not text_chunk or text_chunk == "" then
--- 		return {}, 0
--- 	end
-
--- 	local chars, n = {}, 0 -- Table to store characters we collect
--- 	for _, ch in iter_chars_reverse(text_chunk) do
--- 		if is_vn_char(ch) then
--- 			n = n + 1
--- 			chars[n] = ch
--- 		else
--- 			break -- Stop collecting if we hit a non-Vietnamese character
--- 		end
-
--- 		if n == THRESHOLD_WORD_LEN then
--- 			break
--- 		end
--- 	end
-
--- 	return reverse_list(chars, n), n
--- end
-
--- --- Get valid Vietnamese characters to the **right** of the cursor.
--- --- It fetches chunks of text from the right side, expanding by THRESHOLD_WORD_LEN each time.
--- --- It collects characters that are valid Vietnamese letters and stops when a non-Vietnamese char is found.
--- --- @param bufnr integer: Buffer number
--- --- @param row0 integer: Cursor row (0-based)
--- --- @param col0 integer: Cursor column (0-based)
--- --- @return string[] chars List of right characters (from closest to furthest from cursor)
--- --- @return integer size Length of right_chars collected
--- local function scan_right_word_segment(bufnr, row0, col0)
--- 	local text_chunk = nvim_buf_get_text(bufnr, row0, col0, row0, col0 + WORST_CASE_WORD_LEN, {})[1]
--- 	if not text_chunk or text_chunk == "" then
--- 		return {}, 0
--- 	end
-
--- 	local chars, n = {}, 0
--- 	for _, ch in iter_chars(text_chunk) do
--- 		if is_vn_char(ch) then
--- 			n = n + 1
--- 			chars[n] = ch
--- 		else
--- 			break -- Stop collecting if we hit a non-Vietnamese character
--- 		end
--- 		if n == THRESHOLD_WORD_LEN then
--- 			break -- Stop if we reach the threshold
--- 		end
--- 	end
-
--- 	return chars, n
--- end
-
 --- Main function to extract a processable Vietnamese word under cursor.
 --- Combines characters from left of the cursor, the cursor character itself, and characters to the right.
 --- Checks thresholds and rules to avoid collecting too many characters or empty segments.
@@ -181,19 +112,6 @@ local function extract_vn_word(bufnr, row0, col0)
 
 	local chars = tbl_move(right_chars, 1, right_n, left_n + 1, left_chars)
 	return chars, char_count, left_n + 1
-end
-
---- Calls a function without triggering events
---- @param events string The events to ignore
---- @param fn function The function to call
-local function do_without_events(events, fn)
-	local old = o.eventignore
-
-	o.eventignore = old == "" and events or old .. "," .. events
-
-	fn()
-
-	vim.o.eventignore = old
 end
 
 M.setup = function()
