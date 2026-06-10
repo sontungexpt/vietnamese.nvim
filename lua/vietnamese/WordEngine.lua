@@ -1,15 +1,3 @@
--- Design goals:
---   - Single reusable state object to avoid per-keystroke allocations.
---   - Module-level functions (no method closures created per instance).
---   - Clear separation: helpers (pure), validators, processors, public API.
---
--- Usage (fast, zero-allocation pattern used by the plugin):
---   local state = WordEngine.acquire(chars, char_count, insert_char, insert_index)
---   if WordEngine.is_potential_diacritic_key(state, method_config) and
---      WordEngine.is_potential_vnword(state) then
---       local changed = WordEngine.processes_diacritic(state, method_config, strategy)
---   end
-
 local Constant = require("vietnamese.constant")
 local Util = require("vietnamese.util")
 local BitMask = require("vietnamese.util.bitmask")
