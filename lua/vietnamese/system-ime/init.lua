@@ -288,7 +288,19 @@ function M.setup()
 
 	-- Respect user config initial state (if config is loaded when setup runs)
 	local ok, cfg = pcall(require, "vietnamese.config")
-	if ok and cfg and cfg.is_enabled then
+	if ok then
+		-- Register a listener to respond to runtime changes of plugin enabled state
+		if cfg.on_enabled_change then
+			cfg.on_enabled_change(function(enabled)
+				if enabled then
+					M.disable()
+				else
+					M.enable()
+				end
+			end)
+		end
+
+		-- Apply initial state
 		if cfg.is_enabled() then
 			M.disable()
 		else

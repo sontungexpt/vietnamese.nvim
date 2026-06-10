@@ -78,16 +78,53 @@ M.is_buf_enabled = function(bufnr)
 	return true
 end
 
+-- Listener registry for enabled state changes
+local _enabled_listeners = {}
+
+--- Register a callback invoked when enabled state changes.
+--- Callback signature: fn(enabled:boolean)
+--- @param fn function
+M.on_enabled_change = function(fn)
+	if type(fn) ~= "function" then
+		return
+	end
+	_enabled_listeners[#_enabled_listeners + 1] = fn
+end
+
+--- Unregister a previously registered callback.
+--- @param fn function
+M.off_enabled_change = function(fn)
+	for i = #_enabled_listeners, 1, -1 do
+		if _enabled_listeners[i] == fn then
+			table.remove(_enabled_listeners, i)
+		end
+	end
+end
+
 --- Enable or disable Vietnamese input
 --- @param enabled boolean True to enable Vietnamese input, false to disable
+--- @param opts table|nil Options table. Supported keys:
+---   - silent boolean: if true, don't notify registered listeners
 --- @return boolean enabled True if Vietnamese input is enabled, false otherwise
-M.set_enabled = function(enabled)
+M.set_enabled = function(enabled, opts)
+	if default_config.enabled == enabled then
+		return enabled
+	end
+
 	default_config.enabled = enabled
-	if enabled then
-		-- disable system IME if it was enabled
-		require("vietnamese.system-ime").disable()
-	else
-		require("vietnamese.system-ime").enable()
+	-- notify listeners asynchronously to avoid re-entrancy/pedantic autocmd ordering
+	if not (opts and opts.silent) then
+		local listeners = _enabled_listeners
+		vim.schedule(function()
+			for _, cb in ipairs(listeners) do
+				local ok, err = pcall(cb, enabled)
+				if not ok then
+					require("vietnamese.notifier").error(
+						"vietnamese.nvim: on_enabled_change listener error: " .. tostring(err)
+					)
+				end
+			end
+		end)
 	end
 	return enabled
 end
@@ -123,7 +160,7 @@ local function merge_user_config(defaults, overrides)
 	-- Handle type mismatch
 	if default_type ~= override_type then
 		return defaults
-	-- Handle non-tables
+		-- Handle non-tables
 	elseif default_type ~= "table" then
 		return overrides
 	end
